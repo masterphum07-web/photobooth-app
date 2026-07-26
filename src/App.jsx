@@ -252,6 +252,7 @@ function LandingView({ onStart, onAdmin, config }) {
 // --- NEW: ADMIN DASHBOARD ---
 function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, setLandingConfig, cloudConfig, setCloudConfig, photoConfig, setPhotoConfig, onBack }) {
   const [activeTab, setActiveTab] = useState('landing');
+  const [previewLayout, setPreviewLayout] = useState(LAYOUTS.strip);
   const [newSticker, setNewSticker] = useState('');
   const [newFrameName, setNewFrameName] = useState('');
   const [newFrameColor, setNewFrameColor] = useState('#ff0000');
@@ -499,13 +500,43 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
                </div>
             </div>
             
-            <div className="flex flex-col items-center justify-center p-4 bg-zinc-800 rounded-xl border border-zinc-700">
-              <span className="text-xs text-zinc-400 mb-2">Live Preview (เลย์เอาต์ 1x3)</span>
-              <div className="w-[160px] h-[480px] bg-white relative flex flex-col scale-[0.6] origin-top shadow-xl" style={{ padding: `${photoConfig?.padding ?? 5}%` }}>
-                <div className="flex-1 bg-zinc-300 overflow-hidden relative" style={{ borderRadius: `${photoConfig?.borderRadius || 0}%`, marginBottom: `${photoConfig?.spacing ?? 5}%` }}><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" className="w-full h-full object-cover absolute inset-0" /></div>
-                <div className="flex-1 bg-zinc-300 overflow-hidden relative" style={{ borderRadius: `${photoConfig?.borderRadius || 0}%`, marginBottom: `${photoConfig?.spacing ?? 5}%` }}><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" className="w-full h-full object-cover absolute inset-0" /></div>
-                <div className="flex-1 bg-zinc-300 overflow-hidden relative" style={{ borderRadius: `${photoConfig?.borderRadius || 0}%` }}><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" className="w-full h-full object-cover absolute inset-0" /></div>
-                <div className="h-[15%] w-full flex items-center justify-center shrink-0"><span className="text-black font-bold text-[10px] tracking-wider">{landingConfig?.brandText || 'STUDIO BOOTH'}</span></div>
+            <div className="flex flex-col p-4 bg-zinc-800 rounded-xl border border-zinc-700">
+              <div className="flex justify-between w-full mb-3 items-center">
+                <span className="text-xs text-zinc-400">Live Preview</span>
+                <div className="flex gap-1 flex-wrap justify-end">
+                  {Object.values(LAYOUTS).map(l => (
+                    <button 
+                      key={l.id} 
+                      onClick={() => setPreviewLayout(l)}
+                      className={`text-[10px] px-2 py-1 rounded transition-colors ${previewLayout.id === l.id ? 'bg-blue-500 text-white' : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'}`}
+                    >
+                      {l.id}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex-1 flex items-center justify-center overflow-hidden min-h-[400px]">
+                <div 
+                  className={`w-[120px] bg-white relative flex flex-col scale-[0.9] origin-center shadow-xl ${previewLayout.aspect}`} 
+                  style={{ padding: `${photoConfig?.padding ?? 5}%` }}
+                >
+                  <div 
+                    className={`flex-1 grid ${previewLayout.cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
+                    style={{ gap: `${photoConfig?.spacing ?? 5}%` }}
+                  >
+                    {Array.from({ length: previewLayout.shots }).map((_, i) => (
+                      <div key={i} className="bg-zinc-300 overflow-hidden relative shadow-inner w-full h-full" style={{ borderRadius: `${photoConfig?.borderRadius || 0}%` }}>
+                        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" className="w-full h-full object-cover absolute inset-0" />
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="h-[12%] min-h-[20px] w-full flex items-center justify-center shrink-0">
+                    <span className="text-black font-bold text-[8px] tracking-wider" style={{ fontFamily: `'${landingConfig?.fontFamily || 'Kanit'}', sans-serif` }}>
+                      {landingConfig?.brandText || 'STUDIO BOOTH'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
