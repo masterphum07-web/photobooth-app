@@ -3,14 +3,17 @@ import {
   Camera, Image as ImageIcon, Wand2, Download, QrCode, 
   Settings, Smile, ChevronRight, Sparkles, RefreshCcw, 
   X, Layers, Share2, Loader2, AlertCircle, ShieldAlert,
-  Plus, Trash2, ImagePlus, Paintbrush
+  Plus, Trash2, ImagePlus, Paintbrush, MonitorSmartphone, LayoutTemplate, Square
 } from 'lucide-react';
+import QRCode from 'qrcode';
 
 // --- INITIAL CONFIGURATION & ASSETS ---
 const LAYOUTS = {
-  single: { id: 'single', name: 'โพลารอยด์', shots: 1, cols: 1, aspect: 'aspect-[3/4]', vW: 1200, vH: 1600 },
-  strip: { id: 'strip', name: 'โฟโต้สตริป', shots: 3, cols: 1, aspect: 'aspect-[1/3]', vW: 800, vH: 2400 },
-  grid: { id: 'grid', name: 'กริด 2x2', shots: 4, cols: 2, aspect: 'aspect-square', vW: 1600, vH: 1600 },
+  single: { id: 'single', name: '1 รูป (โพลารอยด์)', shots: 1, cols: 1, aspect: 'aspect-[3/4]', vW: 1200, vH: 1600 },
+  strip: { id: 'strip', name: '3 รูป (แนวตั้ง)', shots: 3, cols: 1, aspect: 'aspect-[1/3]', vW: 800, vH: 2400 },
+  strip_4: { id: 'strip_4', name: '4 รูป (แนวตั้ง)', shots: 4, cols: 1, aspect: 'aspect-[1/4]', vW: 800, vH: 3200 },
+  grid: { id: 'grid', name: '4 รูป (2x2)', shots: 4, cols: 2, aspect: 'aspect-square', vW: 1600, vH: 1600 },
+  grid_6: { id: 'grid_6', name: '6 รูป (2x3)', shots: 6, cols: 2, aspect: 'aspect-[2/3]', vW: 1600, vH: 2400 },
 };
 
 const FILTERS = [
@@ -56,9 +59,20 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // --- MAIN APP COMPONENT ---
 export default function App() {
   const [view, setView] = useState('landing'); 
-  const [config, setConfig] = useState({ layout: LAYOUTS.strip, filter: FILTERS[0] });
+  const DEFAULT_CLOUD_CONFIG = { cloudName: '', uploadPreset: '' };
+  const [cloudConfig, setCloudConfig] = useLocalStorage('studio-booth-cloud', DEFAULT_CLOUD_CONFIG);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('download') === '1') {
+      setView('download');
+    }
+  }, []);
+
+  const [config, setConfig] = useState({ layout: LAYOUTS.strip, filter: FILTERS[0], timer: 3 });
   const [photos, setPhotos] = useState([]);
   const [finalImage, setFinalImage] = useState(null);
+  const [finalVideo, setFinalVideo] = useState(null);
 
   // Admin Managed Assets
   const [customFrames, setCustomFrames] = useLocalStorage('studio-booth-frames', DEFAULT_FRAMES);
@@ -68,6 +82,10 @@ export default function App() {
     title: 'Yeehaw Photo Booth',
     subtitle: 'ถ่ายรูปสไตล์คาวบอย กรอบสวย สติกเกอร์เพียบ!',
     buttonText: '🤠 แตะเพื่อเริ่มถ่ายรูป',
+    brandText: 'STUDIO BOOTH',
+    shareTitle: 'รูปภาพของคุณพร้อมแล้ว!',
+    shareSubtitle: 'สแกนคิวอาร์โค้ดเพื่อเซฟลงมือถือได้เลย หรือกดปุ่มดาวน์โหลดด้านล่าง',
+    fontFamily: 'Kanit',
     bgColor1: '#1a0e04',
     bgColor2: '#3d1f00',
     accentColor: '#d4a055',
@@ -75,10 +93,26 @@ export default function App() {
     bgImage: '',
   };
   const [landingConfig, setLandingConfig] = useLocalStorage('studio-booth-landing', DEFAULT_LANDING_CONFIG);
+  const DEFAULT_PHOTO_CONFIG = { borderRadius: 0, padding: 5, spacing: 5 };
+  const [photoConfig, setPhotoConfig] = useLocalStorage('studio-booth-photo', DEFAULT_PHOTO_CONFIG);
+
+  useEffect(() => {
+    const font = landingConfig?.fontFamily || 'Kanit';
+    document.body.style.fontFamily = `'${font}', sans-serif`;
+    const linkId = `font-${font}`;
+    if (!document.getElementById(linkId)) {
+      const link = document.createElement('link');
+      link.id = linkId;
+      link.rel = 'stylesheet';
+      link.href = `https://fonts.googleapis.com/css2?family=${font.replace(/ /g, '+')}:wght@300;400;500;600;700;800&display=swap`;
+      document.head.appendChild(link);
+    }
+  }, [landingConfig?.fontFamily]);
 
   const resetSession = () => {
     setPhotos([]);
     setFinalImage(null);
+    setFinalVideo(null);
     setView('landing');
   };
 
@@ -91,6 +125,8 @@ export default function App() {
           frames={customFrames} setFrames={setCustomFrames}
           stickers={customStickers} setStickers={setCustomStickers}
           landingConfig={landingConfig} setLandingConfig={setLandingConfig}
+          cloudConfig={cloudConfig} setCloudConfig={setCloudConfig}
+          photoConfig={photoConfig} setPhotoConfig={setPhotoConfig}
           onBack={() => setView('landing')} 
         />
       )}
@@ -106,7 +142,7 @@ export default function App() {
       {view === 'booth' && (
         <BoothView 
           config={config} 
-          onComplete={(captured) => { setPhotos(captured); setView('edit'); }} 
+          onComplete={(captured, video) => { setPhotos(captured); setFinalVideo(video); setView('edit'); }} 
           onCancel={() => setView('setup')}
         />
       )}
@@ -115,12 +151,18 @@ export default function App() {
         <EditorView 
           config={config} photos={photos} 
           availableFrames={customFrames} availableStickers={customStickers}
-          onExport={(imgData) => { setFinalImage(imgData); setView('share'); }}
+          brandText={landingConfig?.brandText || 'STUDIO BOOTH'}
+          fontFamily={landingConfig?.fontFamily || 'Kanit'}
+          photoConfig={photoConfig}
+          finalVideo={finalVideo}
+          onExport={(imgData, videoBlob) => { setFinalImage(imgData); setFinalVideo(videoBlob); setView('share'); }}
           onRetake={() => setView('booth')}
         />
       )}
       
-      {view === 'share' && <ShareView image={finalImage} onDone={resetSession} />}
+      {view === 'share' && <ShareView image={finalImage} videoBlob={finalVideo} cloudConfig={cloudConfig} landingConfig={landingConfig} onDone={resetSession} />}
+
+      {view === 'download' && <DownloadView />}
     </div>
   );
 }
@@ -165,7 +207,7 @@ function LandingView({ onStart, onAdmin, config }) {
         </div>
       )}
       
-      <button onClick={onAdmin} className="absolute top-6 right-6 p-3 bg-amber-900/50 hover:bg-amber-800 rounded-full backdrop-blur-md text-amber-200 hover:text-white transition-colors border shadow-xl z-20" style={{ borderColor: config.accentColor }}>
+      <button onClick={onAdmin} className="absolute bottom-4 left-4 p-2 opacity-10 hover:opacity-100 transition-opacity z-20 text-white">
         <Settings className="w-5 h-5" />
       </button>
 
@@ -208,7 +250,8 @@ function LandingView({ onStart, onAdmin, config }) {
 }
 
 // --- NEW: ADMIN DASHBOARD ---
-function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, setLandingConfig, onBack }) {
+function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, setLandingConfig, cloudConfig, setCloudConfig, photoConfig, setPhotoConfig, onBack }) {
+  const [activeTab, setActiveTab] = useState('landing');
   const [newSticker, setNewSticker] = useState('');
   const [newFrameName, setNewFrameName] = useState('');
   const [newFrameColor, setNewFrameColor] = useState('#ff0000');
@@ -261,7 +304,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
   };
 
   const exportSettings = () => {
-    const data = JSON.stringify({ frames, stickers, landingConfig });
+    const data = JSON.stringify({ frames, stickers, landingConfig, photoConfig });
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -281,6 +324,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
         if (data.frames) setFrames(data.frames);
         if (data.stickers) setStickers(data.stickers);
         if (data.landingConfig) setLandingConfig(data.landingConfig);
+        if (data.photoConfig) setPhotoConfig(data.photoConfig);
         alert("โหลดการตั้งค่าสำเร็จ!");
       } catch (err) {
         alert("ไฟล์ไม่ถูกต้อง");
@@ -313,176 +357,268 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
         </div>
       </header>
 
-      <div className="grid md:grid-cols-2 gap-12 max-w-6xl mx-auto w-full">
-        {/* Landing Page Customization */}
-        <div className="md:col-span-2 space-y-6 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
-          <h3 className="text-xl font-semibold flex items-center gap-2"><Paintbrush className="text-amber-400"/> ตกแต่งหน้าแรก (Landing Page Design)</h3>
-          
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 space-y-4">
-              <div>
-                <label className="text-xs text-zinc-400 mb-1 block">ชื่อหน้าแรก (Title)</label>
-                <input type="text" value={landingConfig.title} onChange={e => setLandingConfig({...landingConfig, title: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
-              </div>
-              <div>
-                <label className="text-xs text-zinc-400 mb-1 block">คำอธิบาย (Subtitle)</label>
-                <input type="text" value={landingConfig.subtitle} onChange={e => setLandingConfig({...landingConfig, subtitle: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
-              </div>
-              <div>
-                <label className="text-xs text-zinc-400 mb-1 block">ข้อความปุ่ม (Button Text)</label>
-                <input type="text" value={landingConfig.buttonText} onChange={e => setLandingConfig({...landingConfig, buttonText: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">สีพื้นหลัง 1</label>
-                  <input type="color" value={landingConfig.bgColor1} onChange={e => setLandingConfig({...landingConfig, bgColor1: e.target.value})} className="w-full h-10 rounded cursor-pointer" />
+      <div className="flex overflow-x-auto gap-2 mb-8 pb-2 max-w-6xl mx-auto w-full border-b border-zinc-800">
+        <button onClick={() => setActiveTab('landing')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'landing' ? 'bg-zinc-800 text-amber-400 border-b-2 border-amber-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><Paintbrush className="w-4 h-4"/> หน้าแรก</button>
+        <button onClick={() => setActiveTab('photo')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'photo' ? 'bg-zinc-800 text-blue-400 border-b-2 border-blue-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><LayoutTemplate className="w-4 h-4"/> ตกแต่งรูปภาพ</button>
+        <button onClick={() => setActiveTab('frames')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'frames' ? 'bg-zinc-800 text-fuchsia-400 border-b-2 border-fuchsia-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><Square className="w-4 h-4"/> กรอบรูป</button>
+        <button onClick={() => setActiveTab('stickers')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'stickers' ? 'bg-zinc-800 text-indigo-400 border-b-2 border-indigo-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><Smile className="w-4 h-4"/> สติกเกอร์</button>
+        <button onClick={() => setActiveTab('cloud')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'cloud' ? 'bg-zinc-800 text-zinc-100 border-b-2 border-zinc-100' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><MonitorSmartphone className="w-4 h-4"/> ระบบแชร์ (Cloud)</button>
+      </div>
+
+      <div className="max-w-6xl mx-auto w-full">
+        {activeTab === 'landing' && (
+          <div className="grid md:grid-cols-2 gap-12">
+            <div className="md:col-span-2 space-y-6 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
+              <h3 className="text-xl font-semibold flex items-center gap-2"><Paintbrush className="text-amber-400"/> ตกแต่งหน้าแรก (Landing Page Design)</h3>
+              
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="md:col-span-2 space-y-4">
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-1 block">ชื่อหน้าแรก (Title)</label>
+                    <input type="text" value={landingConfig.title} onChange={e => setLandingConfig({...landingConfig, title: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-1 block">คำอธิบาย (Subtitle)</label>
+                    <input type="text" value={landingConfig.subtitle} onChange={e => setLandingConfig({...landingConfig, subtitle: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-1 block">ข้อความปุ่ม (Button Text)</label>
+                    <input type="text" value={landingConfig.buttonText} onChange={e => setLandingConfig({...landingConfig, buttonText: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-1 block">ข้อความลายน้ำ (Brand Text)</label>
+                    <input type="text" value={landingConfig.brandText || 'STUDIO BOOTH'} onChange={e => setLandingConfig({...landingConfig, brandText: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-1 block">ฟอนต์ตัวอักษร (Font Family)</label>
+                    <select value={landingConfig.fontFamily || 'Kanit'} onChange={e => setLandingConfig({...landingConfig, fontFamily: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500">
+                      <option value="Kanit">Kanit (มาตรฐาน)</option>
+                      <option value="Prompt">Prompt (โมเดิร์น)</option>
+                      <option value="Mali">Mali (ลายมือ)</option>
+                      <option value="Chonburi">Chonburi (คลาสสิก)</option>
+                      <option value="Sarabun">Sarabun (ทางการ)</option>
+                    </select>
+                  </div>
+                  <div className="pt-4 border-t border-zinc-800">
+                    <label className="text-xs text-zinc-400 mb-1 block">หัวข้อหน้าสแกนรูป (Share Title)</label>
+                    <input type="text" value={landingConfig.shareTitle || 'รูปภาพของคุณพร้อมแล้ว!'} onChange={e => setLandingConfig({...landingConfig, shareTitle: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500 mb-4" />
+                    
+                    <label className="text-xs text-zinc-400 mb-1 block">คำอธิบายหน้าสแกนรูป (Share Subtitle)</label>
+                    <input type="text" value={landingConfig.shareSubtitle || 'สแกนคิวอาร์โค้ดเพื่อเซฟลงมือถือได้เลย หรือกดปุ่มดาวน์โหลดด้านล่าง'} onChange={e => setLandingConfig({...landingConfig, shareSubtitle: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-xs text-zinc-400 mb-1 block">สีพื้นหลัง 1</label>
+                      <input type="color" value={landingConfig.bgColor1} onChange={e => setLandingConfig({...landingConfig, bgColor1: e.target.value})} className="w-full h-10 rounded cursor-pointer" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-400 mb-1 block">สีพื้นหลัง 2</label>
+                      <input type="color" value={landingConfig.bgColor2} onChange={e => setLandingConfig({...landingConfig, bgColor2: e.target.value})} className="w-full h-10 rounded cursor-pointer" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-400 mb-1 block">สีเน้น (Accent)</label>
+                      <input type="color" value={landingConfig.accentColor} onChange={e => setLandingConfig({...landingConfig, accentColor: e.target.value})} className="w-full h-10 rounded cursor-pointer" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="showStars" checked={landingConfig.showStars} onChange={e => setLandingConfig({...landingConfig, showStars: e.target.checked})} className="w-4 h-4 accent-amber-500" />
+                    <label htmlFor="showStars" className="text-sm text-zinc-300">แสดงดาว (Show Stars)</label>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <label className="bg-amber-600/20 hover:bg-amber-600/40 text-amber-400 border border-amber-500/50 cursor-pointer rounded-xl px-4 py-2 text-sm font-bold transition-colors flex items-center justify-center gap-2">
+                      <ImagePlus className="w-4 h-4"/> อัปโหลดพื้นหลัง
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, (data) => setLandingConfig({...landingConfig, bgImage: data}))} />
+                    </label>
+                    {landingConfig.bgImage && (
+                      <button onClick={() => setLandingConfig({...landingConfig, bgImage: ''})} className="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/50 rounded-xl text-sm font-bold hover:bg-red-500/40 transition-colors">
+                        ลบพื้นหลัง
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">สีพื้นหลัง 2</label>
-                  <input type="color" value={landingConfig.bgColor2} onChange={e => setLandingConfig({...landingConfig, bgColor2: e.target.value})} className="w-full h-10 rounded cursor-pointer" />
-                </div>
-                <div>
-                  <label className="text-xs text-zinc-400 mb-1 block">สีเน้น (Accent)</label>
-                  <input type="color" value={landingConfig.accentColor} onChange={e => setLandingConfig({...landingConfig, accentColor: e.target.value})} className="w-full h-10 rounded cursor-pointer" />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="showStars" checked={landingConfig.showStars} onChange={e => setLandingConfig({...landingConfig, showStars: e.target.checked})} className="w-4 h-4 accent-amber-500" />
-                <label htmlFor="showStars" className="text-sm text-zinc-300">แสดงดาว (Show Stars)</label>
-              </div>
-              <div className="flex gap-2 items-center">
-                <label className="bg-amber-600/20 hover:bg-amber-600/40 text-amber-400 border border-amber-500/50 cursor-pointer rounded-xl px-4 py-2 text-sm font-bold transition-colors flex items-center justify-center gap-2">
-                  <ImagePlus className="w-4 h-4"/> อัปโหลดพื้นหลัง
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, (data) => setLandingConfig({...landingConfig, bgImage: data}))} />
-                </label>
-                {landingConfig.bgImage && (
-                  <button onClick={() => setLandingConfig({...landingConfig, bgImage: ''})} className="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/50 rounded-xl text-sm font-bold hover:bg-red-500/40 transition-colors">
-                    ลบพื้นหลัง
-                  </button>
-                )}
-              </div>
-            </div>
-            
-            {/* Live Preview */}
-            <div className="flex flex-col items-center justify-center p-4 bg-zinc-800 rounded-xl border border-zinc-700">
-              <span className="text-xs text-zinc-400 mb-2">Live Preview</span>
-              <div 
-                className="w-[200px] h-[120px] rounded-lg relative overflow-hidden flex flex-col items-center justify-center border-2 border-dashed"
-                style={{
-                  borderColor: landingConfig.accentColor,
-                  background: landingConfig.bgImage 
-                    ? `url(${landingConfig.bgImage}) center/cover no-repeat` 
-                    : `linear-gradient(to bottom, ${landingConfig.bgColor1}, ${landingConfig.bgColor2})`
-                }}
-              >
-                {landingConfig.bgImage && <div className="absolute inset-0 bg-black/40" />}
-                <div className="relative z-10 text-center scale-50 origin-center w-[350px]">
-                  <h4 className="font-serif font-bold text-xl mb-1" style={{ color: landingConfig.accentColor }}>{landingConfig.title}</h4>
+                
+                {/* Live Preview */}
+                <div className="flex flex-col items-center justify-center p-4 bg-zinc-800 rounded-xl border border-zinc-700">
+                  <span className="text-xs text-zinc-400 mb-2">Live Preview</span>
                   <div 
-                    className="mx-auto px-4 py-2 rounded-full text-sm font-bold border-2 inline-block"
-                    style={{ 
-                      backgroundColor: '#3d1f00',
-                      color: landingConfig.accentColor,
-                      borderColor: landingConfig.accentColor
+                    className="w-[200px] h-[120px] rounded-lg relative overflow-hidden flex flex-col items-center justify-center border-2 border-dashed"
+                    style={{
+                      borderColor: landingConfig.accentColor,
+                      background: landingConfig.bgImage 
+                        ? `url(${landingConfig.bgImage}) center/cover no-repeat` 
+                        : `linear-gradient(to bottom, ${landingConfig.bgColor1}, ${landingConfig.bgColor2})`
                     }}
                   >
-                    {landingConfig.buttonText}
+                    {landingConfig.bgImage && <div className="absolute inset-0 bg-black/40" />}
+                    <div className="relative z-10 text-center scale-50 origin-center w-[350px]">
+                      <h4 className="font-serif font-bold text-xl mb-1" style={{ color: landingConfig.accentColor }}>{landingConfig.title}</h4>
+                      <div 
+                        className="mx-auto px-4 py-2 rounded-full text-sm font-bold border-2 inline-block"
+                        style={{ 
+                          backgroundColor: '#3d1f00',
+                          color: landingConfig.accentColor,
+                          borderColor: landingConfig.accentColor
+                        }}
+                      >
+                        {landingConfig.buttonText}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Manage Stickers */}
-        <div className="space-y-6 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
-          <h3 className="text-xl font-semibold flex items-center gap-2"><Smile className="text-indigo-400"/> จัดการสติกเกอร์</h3>
-          
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
+        {activeTab === 'photo' && (
+          <div className="grid md:grid-cols-2 gap-12">
+            <div className="space-y-6 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
+               <h3 className="text-xl font-semibold flex items-center gap-2"><LayoutTemplate className="text-blue-400"/> ตกแต่งเลย์เอาต์รูปภาพ</h3>
+               <div className="space-y-6">
+                 <div>
+                   <label className="flex justify-between text-sm font-bold text-zinc-300 mb-2">
+                     <span>ความมนของมุมรูป (Border Radius)</span>
+                     <span className="text-blue-400">{photoConfig?.borderRadius || 0}%</span>
+                   </label>
+                   <input type="range" min="0" max="50" value={photoConfig?.borderRadius || 0} onChange={e => setPhotoConfig({...photoConfig, borderRadius: parseInt(e.target.value)})} className="w-full accent-blue-500" />
+                 </div>
+                 <div>
+                   <label className="flex justify-between text-sm font-bold text-zinc-300 mb-2">
+                     <span>ระยะห่างระหว่างรูป (Spacing)</span>
+                     <span className="text-blue-400">{photoConfig?.spacing || 5}</span>
+                   </label>
+                   <input type="range" min="0" max="20" value={photoConfig?.spacing || 0} onChange={e => setPhotoConfig({...photoConfig, spacing: parseInt(e.target.value)})} className="w-full accent-blue-500" />
+                 </div>
+                 <div>
+                   <label className="flex justify-between text-sm font-bold text-zinc-300 mb-2">
+                     <span>ขอบนอกสุด (Padding)</span>
+                     <span className="text-blue-400">{photoConfig?.padding || 5}</span>
+                   </label>
+                   <input type="range" min="0" max="20" value={photoConfig?.padding || 0} onChange={e => setPhotoConfig({...photoConfig, padding: parseInt(e.target.value)})} className="w-full accent-blue-500" />
+                 </div>
+               </div>
+            </div>
+            
+            <div className="flex flex-col items-center justify-center p-4 bg-zinc-800 rounded-xl border border-zinc-700">
+              <span className="text-xs text-zinc-400 mb-2">Live Preview (เลย์เอาต์ 1x3)</span>
+              <div className="w-[160px] h-[480px] bg-white relative flex flex-col scale-[0.6] origin-top shadow-xl" style={{ padding: `${photoConfig?.padding ?? 5}%` }}>
+                <div className="flex-1 bg-zinc-300 overflow-hidden relative" style={{ borderRadius: `${photoConfig?.borderRadius || 0}%`, marginBottom: `${photoConfig?.spacing ?? 5}%` }}><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" className="w-full h-full object-cover absolute inset-0" /></div>
+                <div className="flex-1 bg-zinc-300 overflow-hidden relative" style={{ borderRadius: `${photoConfig?.borderRadius || 0}%`, marginBottom: `${photoConfig?.spacing ?? 5}%` }}><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" className="w-full h-full object-cover absolute inset-0" /></div>
+                <div className="flex-1 bg-zinc-300 overflow-hidden relative" style={{ borderRadius: `${photoConfig?.borderRadius || 0}%` }}><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" className="w-full h-full object-cover absolute inset-0" /></div>
+                <div className="h-[15%] w-full flex items-center justify-center shrink-0"><span className="text-black font-bold text-[10px] tracking-wider">{landingConfig?.brandText || 'STUDIO BOOTH'}</span></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'frames' && (
+          <div className="space-y-6 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
+            <h3 className="text-xl font-semibold flex items-center gap-2"><Settings className="text-fuchsia-400"/> จัดการกรอบรูป (สีพื้นฐาน)</h3>
+            
+            <div className="space-y-4 bg-zinc-800/50 p-4 rounded-xl border border-zinc-700">
               <input 
-                type="text" value={newSticker} onChange={e => setNewSticker(e.target.value)}
-                placeholder="ใส่อีโมจิ หรือข้อความ" 
-                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500"
+                type="text" value={newFrameName} onChange={e => setNewFrameName(e.target.value)}
+                placeholder="ชื่อกรอบรูป เช่น พาสเทลเขียว" 
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-fuchsia-500"
               />
-              <button onClick={addSticker} className="bg-indigo-600 hover:bg-indigo-700 px-6 rounded-xl font-bold transition-colors">เพิ่ม</button>
-            </div>
-            <div className="relative mt-2">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-800"></div></div>
-              <div className="relative flex justify-center"><span className="px-2 bg-zinc-900/50 text-xs text-zinc-500 uppercase">หรือ</span></div>
-            </div>
-            <label className="w-full bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 border border-indigo-500/50 cursor-pointer rounded-xl px-4 py-3 text-center font-bold transition-colors flex items-center justify-center gap-2">
-              <ImagePlus className="w-5 h-5"/> อัปโหลดรูปภาพสติกเกอร์ (PNG)
-              <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={(e) => handleImageUpload(e, addImageSticker)} />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-5 gap-3 mt-4">
-            {stickers.map((st, i) => (
-              <div key={i} className="relative aspect-square bg-zinc-800 rounded-xl flex items-center justify-center text-3xl group border border-zinc-700 overflow-hidden">
-                {st.startsWith('data:image') ? <img src={st} className="w-full h-full object-contain p-2" /> : st}
-                <button 
-                  onClick={() => setStickers(stickers.filter((_, idx) => idx !== i))}
-                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-                >
-                  <Trash2 className="w-3 h-3 text-white" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Manage Frames */}
-        <div className="space-y-6 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
-          <h3 className="text-xl font-semibold flex items-center gap-2"><Settings className="text-fuchsia-400"/> จัดการกรอบรูป (สีพื้นฐาน)</h3>
-          
-          <div className="space-y-4 bg-zinc-800/50 p-4 rounded-xl border border-zinc-700">
-            <input 
-              type="text" value={newFrameName} onChange={e => setNewFrameName(e.target.value)}
-              placeholder="ชื่อกรอบรูป เช่น พาสเทลเขียว" 
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-fuchsia-500"
-            />
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label className="text-xs text-zinc-400 mb-1 block">สีพื้นหลัง</label>
-                <input type="color" value={newFrameColor} onChange={e => setNewFrameColor(e.target.value)} className="w-full h-12 rounded cursor-pointer" />
-              </div>
-              <div className="flex-1">
-                <label className="text-xs text-zinc-400 mb-1 block">สีตัวอักษร</label>
-                <input type="color" value={newFrameTextColor} onChange={e => setNewFrameTextColor(e.target.value)} className="w-full h-12 rounded cursor-pointer" />
-              </div>
-            </div>
-            <button onClick={addFrame} className="w-full bg-fuchsia-600 hover:bg-fuchsia-700 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
-              <Plus className="w-5 h-5"/> สร้างกรอบสีใหม่
-            </button>
-            <div className="relative mt-2">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-700"></div></div>
-              <div className="relative flex justify-center"><span className="px-2 bg-zinc-800/50 text-xs text-zinc-400 uppercase">หรือ</span></div>
-            </div>
-            <label className="w-full bg-fuchsia-600/20 hover:bg-fuchsia-600/40 text-fuchsia-400 border border-fuchsia-500/50 py-3 rounded-xl cursor-pointer font-bold transition-colors flex items-center justify-center gap-2 mt-2">
-              <ImagePlus className="w-5 h-5"/> อัปโหลดกรอบรูป (Overlay PNG)
-              <input type="file" accept="image/png" className="hidden" onChange={(e) => handleImageUpload(e, addImageFrame)} />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            {frames.map((fr, i) => (
-              <div key={i} className="flex items-center justify-between bg-zinc-800 p-3 rounded-xl border border-zinc-700">
-                <div className="flex items-center gap-3 w-3/4">
-                  <div className="w-8 h-8 rounded-md shadow-inner border border-white/10 shrink-0 overflow-hidden bg-white flex items-center justify-center" style={{ background: fr.type === 'color' ? fr.bg : 'transparent' }}>
-                    {fr.type === 'image' && <img src={fr.src} className="w-full h-full object-cover" />}
-                  </div>
-                  <span className="text-sm font-medium truncate">{fr.name}</span>
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="text-xs text-zinc-400 mb-1 block">สีพื้นหลัง</label>
+                  <input type="color" value={newFrameColor} onChange={e => setNewFrameColor(e.target.value)} className="w-full h-12 rounded cursor-pointer" />
                 </div>
-                {i >= 4 && ( // Don't allow deleting default frames easily
-                  <button onClick={() => setFrames(frames.filter(f => f.id !== fr.id))} className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
+                <div className="flex-1">
+                  <label className="text-xs text-zinc-400 mb-1 block">สีตัวอักษร</label>
+                  <input type="color" value={newFrameTextColor} onChange={e => setNewFrameTextColor(e.target.value)} className="w-full h-12 rounded cursor-pointer" />
+                </div>
               </div>
-            ))}
+              <button onClick={addFrame} className="w-full bg-fuchsia-600 hover:bg-fuchsia-700 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
+                <Plus className="w-5 h-5"/> สร้างกรอบสีใหม่
+              </button>
+              <div className="relative mt-2">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-700"></div></div>
+                <div className="relative flex justify-center"><span className="px-2 bg-zinc-800/50 text-xs text-zinc-400 uppercase">หรือ</span></div>
+              </div>
+              <label className="w-full bg-fuchsia-600/20 hover:bg-fuchsia-600/40 text-fuchsia-400 border border-fuchsia-500/50 py-3 rounded-xl cursor-pointer font-bold transition-colors flex items-center justify-center gap-2 mt-2">
+                <ImagePlus className="w-5 h-5"/> อัปโหลดกรอบรูป (Overlay PNG)
+                <input type="file" accept="image/png" className="hidden" onChange={(e) => handleImageUpload(e, addImageFrame)} />
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              {frames.map((fr, i) => (
+                <div key={i} className="flex items-center justify-between bg-zinc-800 p-3 rounded-xl border border-zinc-700">
+                  <div className="flex items-center gap-3 w-3/4">
+                    <div className="w-8 h-8 rounded-md shadow-inner border border-white/10 shrink-0 overflow-hidden bg-white flex items-center justify-center" style={{ background: fr.type === 'color' ? fr.bg : 'transparent' }}>
+                      {fr.type === 'image' && <img src={fr.src} className="w-full h-full object-cover" />}
+                    </div>
+                    <span className="text-sm font-medium truncate">{fr.name}</span>
+                  </div>
+                  {i >= 4 && ( // Don't allow deleting default frames easily
+                    <button onClick={() => setFrames(frames.filter(f => f.id !== fr.id))} className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+        
+        {activeTab === 'stickers' && (
+          <div className="space-y-6 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
+            <h3 className="text-xl font-semibold flex items-center gap-2"><Smile className="text-indigo-400"/> จัดการสติกเกอร์</h3>
+            
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <input 
+                  type="text" value={newSticker} onChange={e => setNewSticker(e.target.value)}
+                  placeholder="ใส่อีโมจิ หรือข้อความ" 
+                  className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500"
+                />
+                <button onClick={addSticker} className="bg-indigo-600 hover:bg-indigo-700 px-6 rounded-xl font-bold transition-colors">เพิ่ม</button>
+              </div>
+              <div className="relative mt-2">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-800"></div></div>
+                <div className="relative flex justify-center"><span className="px-2 bg-zinc-900/50 text-xs text-zinc-500 uppercase">หรือ</span></div>
+              </div>
+              <label className="w-full bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 border border-indigo-500/50 cursor-pointer rounded-xl px-4 py-3 text-center font-bold transition-colors flex items-center justify-center gap-2">
+                <ImagePlus className="w-5 h-5"/> อัปโหลดรูปภาพสติกเกอร์ (PNG)
+                <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={(e) => handleImageUpload(e, addImageSticker)} />
+              </label>
+            </div>
+
+            <div className="grid grid-cols-5 gap-3 mt-4">
+              {stickers.map((st, i) => (
+                <div key={i} className="relative aspect-square bg-zinc-800 rounded-xl flex items-center justify-center text-3xl group border border-zinc-700 overflow-hidden">
+                  {st.startsWith('data:image') ? <img src={st} className="w-full h-full object-contain p-2" /> : st}
+                  <button 
+                    onClick={() => setStickers(stickers.filter((_, idx) => idx !== i))}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                  >
+                    <Trash2 className="w-3 h-3 text-white" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {activeTab === 'cloud' && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-8">
+             <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Settings className="w-5 h-5 text-amber-500" /> Cloudinary Settings (สำหรับ iPad / QR Code)</h3>
+             <p className="text-zinc-400 text-sm mb-4">สมัครฟรีที่ cloudinary.com แล้วนำค่า 2 ตัวนี้มาใส่ เพื่อให้ QR Code โหลดรูปลงมือถือได้</p>
+             <div className="flex flex-col gap-4">
+                <div>
+                   <label className="block text-sm font-bold text-zinc-400 mb-1">Cloud Name</label>
+                   <input type="text" value={cloudConfig.cloudName} onChange={e => setCloudConfig({...cloudConfig, cloudName: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-2 text-white" placeholder="e.g. dxyzxyz" />
+                </div>
+                <div>
+                   <label className="block text-sm font-bold text-zinc-400 mb-1">Upload Preset (Unsigned)</label>
+                   <input type="text" value={cloudConfig.uploadPreset} onChange={e => setCloudConfig({...cloudConfig, uploadPreset: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-2 text-white" placeholder="e.g. my_unsigned_preset" />
+                </div>
+             </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -557,6 +693,28 @@ function SetupView({ config, setConfig, onNext, onBack }) {
         </div>
       </div>
 
+      <div className="mt-8 space-y-4">
+        <div className="flex items-center gap-2 text-lg font-medium border-b border-zinc-800 pb-2 text-blue-400">
+          <span className="text-xl">⏱️</span>
+          <h3 className="text-zinc-50">เวลานับถอยหลัง (Timer)</h3>
+        </div>
+        <div className="flex gap-4">
+          {[3, 5, 10].map(t => (
+            <button
+              key={t}
+              onClick={() => setConfig({ ...config, timer: t })}
+              className={`flex-1 py-4 rounded-xl border-2 transition-all font-bold ${
+                config.timer === t 
+                  ? 'border-blue-500 bg-blue-500/10 shadow-[0_0_15px_rgba(59,130,246,0.2)] text-blue-400' 
+                  : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700 text-zinc-300'
+              }`}
+            >
+              {t} วินาที
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="py-8 flex justify-end">
         <button 
           onClick={onNext}
@@ -573,6 +731,10 @@ function SetupView({ config, setConfig, onNext, onBack }) {
 function BoothView({ config, onComplete, onCancel }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const recordCanvasRef = useRef(null);
+  const recorderRef = useRef(null);
+  const requestRef = useRef(null);
+  const chunksRef = useRef([]);
   const [stream, setStream] = useState(null);
   const [status, setStatus] = useState('idle'); 
   const [count, setCount] = useState(3);
@@ -602,77 +764,155 @@ function BoothView({ config, onComplete, onCancel }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const takePhoto = useCallback(async () => {
-    if (!videoRef.current || !canvasRef.current) return;
+  const startRecording = () => {
+    if (!videoRef.current || !recordCanvasRef.current) return;
     const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    // Capture at high resolution based on video feed
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const canvas = recordCanvasRef.current;
+    // Safe fallback dimensions if video is not fully initialized
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
     const ctx = canvas.getContext('2d');
     
-    if (config.filter.css) ctx.filter = config.filter.css;
+    const render = () => {
+      if (!videoRef.current) return;
+      if (config.filter.css) ctx.filter = config.filter.css;
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      requestRef.current = requestAnimationFrame(render);
+    };
+    requestRef.current = requestAnimationFrame(render);
     
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1); // Mirror
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
-    setCaptured(prev => [...prev, imgData]);
-    
-    if (shotIndex < config.layout.shots - 1) {
-      setShotIndex(prev => prev + 1);
-      setStatus('idle');
-    } else {
-      setStatus('done');
-      setTimeout(() => onComplete([...captured, imgData]), 800);
+    try {
+      chunksRef.current = [];
+      const stream = canvas.captureStream(30);
+      let options = { mimeType: 'video/webm' };
+      if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+        options = { mimeType: 'video/webm;codecs=vp9' };
+      } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+        options = { mimeType: 'video/mp4' };
+      }
+      recorderRef.current = new MediaRecorder(stream, options);
+      recorderRef.current.ondataavailable = e => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorderRef.current.start(500); // Record in 500ms chunks to ensure data availability
+    } catch(e) {
+      console.error("Recording not supported", e);
     }
-  }, [config.filter.css, config.layout.shots, captured, shotIndex, onComplete]);
+  };
+
+  const stopRecording = () => {
+    return new Promise(resolve => {
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (recorderRef.current && recorderRef.current.state === 'recording') {
+        recorderRef.current.onstop = () => {
+          const blob = new Blob(chunksRef.current, { type: recorderRef.current.mimeType });
+          resolve(blob);
+        };
+        recorderRef.current.stop();
+      } else {
+        resolve(null);
+      }
+    });
+  };
 
   const startSequence = async () => {
-    setStatus('countdown');
-    for (let i = 3; i > 0; i--) {
-      setCount(i);
-      await wait(1000);
+    startRecording();
+    let currentCaptured = [];
+    
+    for (let currentShot = 0; currentShot < config.layout.shots; currentShot++) {
+      setShotIndex(currentShot);
+      setStatus('countdown');
+      for (let i = config.timer; i > 0; i--) {
+        setCount(i);
+        await wait(1000);
+      }
+      setStatus('flashing');
+      await wait(150);
+      
+      // Capture
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (config.filter.css) ctx.filter = config.filter.css;
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      
+      currentCaptured.push(imgData);
+      setCaptured([...currentCaptured]);
+      
+      if (currentShot < config.layout.shots - 1) {
+         setStatus('idle'); // Just to show idle UI briefly
+         await wait(1000); // 1 second break between shots
+      }
     }
-    setStatus('flashing');
-    await wait(150);
-    takePhoto();
+    
+    setStatus('done');
+    const finalBlob = await stopRecording();
+    setTimeout(() => onComplete([...currentCaptured], finalBlob), 800);
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-black relative">
-      <header className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
-        <button onClick={onCancel} className="p-2 bg-black/50 hover:bg-black/80 backdrop-blur-md rounded-full text-white transition-colors">
-          <X className="w-6 h-6" />
-        </button>
-        <div className="bg-black/50 backdrop-blur-md px-6 py-2 rounded-full text-sm font-bold border border-zinc-800 shadow-lg">
-          ช็อตที่ {shotIndex + 1} / {config.layout.shots}
+    <div className="flex-1 flex flex-col bg-zinc-950 p-2 sm:p-6 relative">
+      {/* Physical Machine Frame */}
+      <div className="flex-1 bg-black rounded-[2rem] border-[12px] border-zinc-800 shadow-[0_0_50px_rgba(0,0,0,0.8)_inset,0_20px_50px_rgba(0,0,0,0.5)] relative overflow-hidden flex flex-col">
+        
+        {/* Screen Glare */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none z-30" />
+        
+        {/* Top Camera Hole indicator */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 w-4 h-4 bg-black border-2 border-zinc-700 rounded-full z-40 flex items-center justify-center">
+          <div className="w-1.5 h-1.5 bg-blue-500/50 rounded-full" />
         </div>
-      </header>
 
-      <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-        <video 
-          ref={videoRef} autoPlay playsInline muted 
-          className="w-full h-full object-cover -scale-x-100"
-          style={{ filter: config.filter.css }}
-        />
+        <header className="absolute top-6 left-6 right-6 z-40 flex justify-between items-center">
+          <button onClick={onCancel} className="p-3 bg-black/60 hover:bg-black/90 backdrop-blur-md rounded-full text-white transition-all hover:scale-110 active:scale-90 border border-white/10 shadow-xl">
+            <X className="w-5 h-5" />
+          </button>
+          <div className="bg-black/60 backdrop-blur-md px-6 py-2 rounded-full text-sm font-bold border border-white/10 shadow-xl text-white">
+            ช็อตที่ {shotIndex + 1} / {config.layout.shots}
+          </div>
+        </header>
+
+        <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-zinc-900">
+          <video 
+            ref={videoRef} autoPlay playsInline muted 
+            className="w-full h-full object-cover -scale-x-100"
+            style={{ filter: config.filter.css }}
+          />
         <canvas ref={canvasRef} className="hidden" />
+        <canvas ref={recordCanvasRef} className="hidden" />
+
+        {/* Camera UI Overlay (Corners) */}
+        <div className="absolute inset-8 border-2 border-white/10 rounded-2xl pointer-events-none z-20">
+          <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white/60 rounded-tl-xl" />
+          <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white/60 rounded-tr-xl" />
+          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white/60 rounded-bl-xl" />
+          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white/60 rounded-br-xl" />
+        </div>
 
         {status === 'idle' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-50">
             <button 
               onClick={startSequence}
-              className="w-24 h-24 rounded-full border-4 border-white/50 flex items-center justify-center hover:border-white transition-colors group shadow-[0_0_30px_rgba(255,255,255,0.3)]"
+              className="w-24 h-24 rounded-full border-4 border-red-500 bg-red-600/30 p-2 flex items-center justify-center hover:bg-red-600/50 hover:scale-110 hover:shadow-[0_0_40px_rgba(239,68,68,0.8)] active:scale-90 transition-all duration-300 group shadow-[0_0_30px_rgba(239,68,68,0.4)]"
             >
-              <div className="w-20 h-20 bg-white rounded-full group-hover:scale-95 transition-transform" />
+              <div className="w-full h-full bg-red-500 rounded-full group-hover:bg-red-400 group-hover:shadow-[0_0_20px_rgba(255,255,255,0.8)] transition-all duration-300 shadow-inner shadow-black/30" />
             </button>
+            <span className="text-white text-sm font-bold tracking-wider drop-shadow-[0_2px_4px_rgba(0,0,0,1)] bg-black/60 px-5 py-2 rounded-full backdrop-blur-md border border-white/10 animate-pulse">
+              📸 แตะเพื่อเริ่มถ่ายรูป
+            </span>
           </div>
         )}
 
         {status === 'countdown' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-md">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
             <span className="text-[200px] font-black text-white drop-shadow-[0_0_40px_rgba(0,0,0,0.8)] animate-pulse">
               {count}
             </span>
@@ -684,12 +924,15 @@ function BoothView({ config, onComplete, onCancel }) {
         )}
       </div>
 
-      <div className="h-32 bg-zinc-950 border-t border-zinc-900 p-4 flex gap-4 overflow-x-auto items-center justify-center">
+      </div>
+
+      {/* Captured Preview Strip at Bottom */}
+      <div className="h-32 mt-4 bg-zinc-950 border border-zinc-800 rounded-xl p-3 flex gap-3 overflow-x-auto items-center justify-center">
         {Array.from({ length: config.layout.shots }).map((_, i) => (
           <div 
             key={i} 
-            className={`h-full aspect-[3/4] rounded-lg border-2 overflow-hidden bg-zinc-900 transition-all ${
-              i === shotIndex ? 'border-indigo-500 scale-105 shadow-lg shadow-indigo-500/20' : 'border-zinc-800'
+            className={`h-full aspect-[3/4] rounded-lg border-2 overflow-hidden bg-zinc-900 transition-all duration-300 ${
+              i === shotIndex ? 'border-amber-500 scale-105 shadow-lg shadow-amber-500/20' : 'border-zinc-800'
             }`}
           >
             {captured[i] ? (
@@ -800,7 +1043,7 @@ function DraggableSticker({ sticker, containerRef, onUpdate, onDelete, isSelecte
   );
 }
 
-function EditorView({ config, photos, availableFrames, availableStickers, onExport, onRetake }) {
+function EditorView({ config, photos, availableFrames, availableStickers, brandText, fontFamily, finalVideo, onExport, onRetake }) {
   const [stickers, setStickers] = useState([]);
   const [selectedStickerId, setSelectedStickerId] = useState(null);
   const [activeTab, setActiveTab] = useState('stickers'); 
@@ -870,14 +1113,14 @@ function EditorView({ config, photos, availableFrames, availableStickers, onExpo
       }
 
       // 2. Calculate Photo Layout Mathematics
-      const padding = vW * 0.05; // 5% padding
+      const padding = vW * ((photoConfig?.padding ?? 5) / 100); 
       const bottomArea = vH * 0.1; // 10% bottom area for branding
       const contentW = vW - (padding * 2);
       const contentH = vH - padding - bottomArea;
       
       const cols = config.layout.cols;
       const rows = Math.ceil(config.layout.shots / cols);
-      const spacing = padding * 0.5;
+      const spacing = vW * ((photoConfig?.spacing ?? 5) / 100);
 
       const slotW = (contentW - (spacing * (cols - 1))) / cols;
       const slotH = (contentH - (spacing * (rows - 1))) / rows;
@@ -910,12 +1153,21 @@ function EditorView({ config, photos, availableFrames, availableStickers, onExpo
               drawY = (img.height - drawH) / 2;
             }
             
+            const radius = slotW * ((photoConfig?.borderRadius ?? 0) / 100);
+            
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(x, y, slotW, slotH, radius);
+            ctx.clip();
+            
             // Draw photo background (gray)
             ctx.fillStyle = '#e4e4e7';
             ctx.fillRect(x, y, slotW, slotH);
             
             // Draw Image
             ctx.drawImage(img, drawX, drawY, drawW, drawH, x, y, slotW, slotH);
+            
+            ctx.restore();
             resolve();
           };
           img.src = photoSrc;
@@ -936,13 +1188,22 @@ function EditorView({ config, photos, availableFrames, availableStickers, onExpo
         });
       }
 
-      // 4. Draw Branding (Hide if using custom image frame)
+      // 4. Draw Branding and Date (Hide if using custom image frame)
       if (selectedFrame.type !== 'image') {
         ctx.fillStyle = selectedFrame.text;
-        ctx.font = `bold ${vW * 0.04}px sans-serif`;
+        
+        // Brand Text
+        ctx.font = `bold ${vW * 0.04}px '${fontFamily}', sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('STUDIO BOOTH', vW / 2, vH - (bottomArea / 2));
+        ctx.fillText(brandText, vW / 2, vH - (bottomArea / 2));
+
+        // Date (Top-left)
+        const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        ctx.font = `bold ${vW * 0.02}px '${fontFamily}', sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(today, vW * 0.04, vH * 0.02);
       }
 
       // 5. Draw Stickers (Mapping % to absolute canvas pixels)
@@ -976,7 +1237,7 @@ function EditorView({ config, photos, availableFrames, availableStickers, onExpo
       }
 
       const finalDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-      onExport(finalDataUrl);
+      onExport(finalDataUrl, finalVideo);
     } catch (err) {
       console.error("Export failed:", err);
       alert("เกิดข้อผิดพลาดในการสร้างรูปภาพ กรุณาลองใหม่");
@@ -1031,18 +1292,36 @@ function EditorView({ config, photos, availableFrames, availableStickers, onExpo
           */}
           <div 
             ref={layoutRef}
-            className={`relative overflow-hidden ${config.layout.aspect} flex flex-col gap-2 p-[4%] transition-colors duration-300 ring-1 ring-white/10`}
-            style={{ 
-              background: selectedFrame.type === 'image' ? '#ffffff' : selectedFrame.bg,
-              height: 'calc(100vh - 220px)',
-              maxHeight: '850px',
-              minHeight: '400px'
-            }}
+            className={`relative overflow-hidden ${config.layout.aspect} flex flex-col transition-colors duration-300 ring-1 ring-white/10`}
+              style={{ 
+                background: selectedFrame.type === 'image' ? '#ffffff' : selectedFrame.bg,
+                height: 'calc(100vh - 220px)',
+                maxHeight: '850px',
+                minHeight: '400px',
+                padding: `${photoConfig?.padding ?? 5}%`
+              }}
           >
+            {/* Top-left date */}
+            {selectedFrame.type !== 'image' && (
+              <div 
+                className="absolute top-[2%] left-[4%] z-20 font-bold opacity-80 tracking-widest pointer-events-none"
+                style={{ color: selectedFrame.text, fontSize: 'clamp(8px, 1.2vh, 16px)', fontFamily: `'${fontFamily}', sans-serif` }}
+              >
+                {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </div>
+            )}
+
             {/* Photos Grid */}
-            <div className={`flex-1 grid gap-[4%] ${config.layout.cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            <div 
+              className={`flex-1 grid ${config.layout.cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
+              style={{ gap: `${photoConfig?.spacing ?? 5}%` }}
+            >
               {photos.map((photo, i) => (
-                <div key={i} className="bg-zinc-200 overflow-hidden relative shadow-inner w-full h-full">
+                <div 
+                  key={i} 
+                  className="bg-zinc-200 overflow-hidden relative shadow-inner w-full h-full"
+                  style={{ borderRadius: `${photoConfig?.borderRadius || 0}%` }}
+                >
                   <img src={photo} alt="" className="w-full h-full object-cover absolute inset-0" />
                 </div>
               ))}
@@ -1056,8 +1335,8 @@ function EditorView({ config, photos, availableFrames, availableStickers, onExpo
             {/* Branding */}
             {selectedFrame.type !== 'image' && (
               <div className="h-[10%] min-h-[40px] flex items-center justify-center shrink-0 z-0">
-                <span className="font-bold text-[clamp(12px,2vh,24px)] tracking-widest opacity-90" style={{ color: selectedFrame.text }}>
-                  STUDIO BOOTH
+                <span className="font-bold text-[clamp(12px,2vh,24px)] tracking-widest opacity-90" style={{ color: selectedFrame.text, fontFamily: `'${fontFamily}', sans-serif` }}>
+                  {brandText}
                 </span>
               </div>
             )}
@@ -1171,53 +1450,139 @@ function EditorView({ config, photos, availableFrames, availableStickers, onExpo
   );
 }
 
-function ShareView({ image, onDone }) {
-  const [uploadStatus, setUploadStatus] = useState('uploading'); 
+function ShareView({ image, videoBlob, cloudConfig, landingConfig, onDone }) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const [qrCodeUrl, setQrCodeUrl] = useState(null);
+  const [printableImage, setPrintableImage] = useState(null);
+
+  const downloadVideo = () => {
+    if (!videoBlob) return;
+    const url = URL.createObjectURL(videoBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `photobooth-timelapse-${Date.now()}.webm`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   useEffect(() => {
     if (!image) return;
+    
+    if (!cloudConfig?.cloudName || !cloudConfig?.uploadPreset) {
+      setErrorMsg("⚠️ ยังไม่ได้ตั้งค่า Cloudinary ในเมนู Admin ทำให้ QR Code สแกนโหลดไฟล์ไม่ได้ (รันแบบออฟไลน์)");
+      return;
+    }
+
     let isMounted = true;
 
-    const uploadImage = async () => {
+    const uploadToCloudinary = async () => {
+      setIsUploading(true);
       try {
-        const res = await fetch(image);
-        const blob = await res.blob();
-        const formData = new FormData();
-        formData.append('file', blob, 'studio-booth.jpg');
+        const uploadFile = async (file, resourceType = 'image') => {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('upload_preset', cloudConfig.uploadPreset);
+          const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudConfig.cloudName}/${resourceType}/upload`, {
+            method: 'POST',
+            body: formData
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error.message);
+          return data.secure_url;
+        };
 
-        // Using tmpfiles.org for anonymous fast upload
-        const uploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
-          method: 'POST',
-          body: formData
-        });
+        // If 'image' is a data URL, fetch it to a blob first
+        const resImage = await fetch(image);
+        const imageBlob = await resImage.blob();
+        const imgUrl = await uploadFile(imageBlob, 'image');
         
-        const json = await uploadRes.json();
+        let vidUrl = '';
+        if (videoBlob) {
+          vidUrl = await uploadFile(videoBlob, 'video');
+          vidUrl = vidUrl.replace(/\.(webm|ogg)$/i, '.mp4'); // Force Cloudinary to convert to mp4 for iOS support
+        }
         
-        if (json.status === 'success' && isMounted) {
-          // Format URL to direct image URL for saving
-          const fileUrl = json.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
-          const qr = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(fileUrl)}&bgcolor=ffffff&color=000000`;
-          setQrCodeUrl(qr);
-          setUploadStatus('done');
-        } else if (isMounted) {
-          throw new Error('Upload failed');
+        const url = new URL(window.location.href);
+        url.searchParams.set('download', '1');
+        url.searchParams.set('img', imgUrl);
+        if (vidUrl) url.searchParams.set('vid', vidUrl);
+        
+        if (isMounted) {
+          setShareUrl(url.toString());
+          let finalQrDataUrl = null;
+          
+          try {
+            finalQrDataUrl = await QRCode.toDataURL(url.toString(), {
+              width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' }
+            });
+          } catch (qrErr) {
+            console.error("Local QR generation failed:", qrErr);
+            finalQrDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url.toString())}&bgcolor=ffffff&color=000000`;
+          }
+
+          setQrCodeUrl(finalQrDataUrl);
+          
+          // Generate composite image with QR code for printing/downloading
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const baseImg = new Image();
+          baseImg.crossOrigin = "Anonymous";
+          
+          baseImg.onload = () => {
+            canvas.width = baseImg.width;
+            canvas.height = baseImg.height;
+            ctx.drawImage(baseImg, 0, 0);
+
+            const qrImg = new Image();
+            qrImg.crossOrigin = "Anonymous"; // Important if falling back to external API
+            qrImg.onload = () => {
+              const qrSize = Math.max(canvas.width * 0.12, 100); 
+              const padding = canvas.width * 0.04;
+              const x = canvas.width - qrSize - padding;
+              const y = padding;
+              
+              // Draw white background for QR
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(x - 4, y - 4, qrSize + 8, qrSize + 8);
+              // Draw QR Code
+              ctx.drawImage(qrImg, x, y, qrSize, qrSize);
+              
+              try {
+                setPrintableImage(canvas.toDataURL('image/jpeg', 0.95));
+              } catch (e) {
+                console.error("Failed to composite QR code (CORS issue):", e);
+              }
+            };
+            qrImg.onerror = (e) => console.error("QR Image failed to load on canvas", e);
+            qrImg.src = finalQrDataUrl;
+          };
+          baseImg.onerror = (e) => console.error("Base image failed to load on canvas", e);
+          baseImg.src = image;
         }
       } catch (err) {
-        console.error('Cloud Upload Error:', err);
-        if (isMounted) setUploadStatus('error');
+        console.error(err);
+        if (isMounted) {
+          setErrorMsg("อัปโหลดไม่สำเร็จ: " + err.message);
+        }
+      } finally {
+        if (isMounted) {
+          setIsUploading(false);
+        }
       }
     };
 
-    uploadImage();
+    uploadToCloudinary();
     return () => { isMounted = false; };
-  }, [image]);
+  }, [image, videoBlob, cloudConfig]);
 
   const handleDownload = () => {
     if (!image) return;
     try {
       const link = document.createElement('a');
-      link.href = image;
+      link.href = printableImage || image;
       link.download = `StudioBooth_${new Date().getTime()}.jpg`;
       document.body.appendChild(link);
       link.click();
@@ -1227,87 +1592,191 @@ function ShareView({ image, onDone }) {
     }
   };
 
+  const handlePrint = () => {
+    if (!image) return;
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+      <html>
+        <head>
+          <title>Print Photobooth</title>
+          <style>
+            @page { margin: 0; }
+            body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: white; }
+            img { max-width: 100%; max-height: 100%; object-fit: contain; }
+          </style>
+        </head>
+        <body>
+          <img src="${printableImage || image}" onload="window.print(); setTimeout(() => { window.parent.document.body.removeChild(window.frameElement); }, 1000);" />
+        </body>
+      </html>
+    `);
+    doc.close();
+  };
+
   return (
-    <div className="flex-1 flex items-center justify-center p-4 md:p-6 relative overflow-y-auto bg-zinc-950">
+    <div 
+      className="flex-1 flex items-center justify-center p-4 md:p-6 relative overflow-y-auto text-amber-50"
+      style={{ background: `linear-gradient(to bottom, ${landingConfig?.bgColor1 || '#1a0e04'}, ${landingConfig?.bgColor2 || '#3d1f00'})` }}
+    >
       <div className="absolute inset-0 pointer-events-none opacity-30 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]" />
       
       <div className="relative z-10 max-w-5xl w-full grid md:grid-cols-2 gap-8 md:gap-12 items-center py-10">
         
-        {/* Left: Result Image */}
-        <div className="flex flex-col items-center">
-          <div className="relative p-2 bg-zinc-900 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-zinc-800 md:rotate-[-2deg] hover:rotate-0 transition-transform duration-500">
-            <img src={image} alt="Final Print" className="max-h-[50vh] md:max-h-[65vh] object-contain rounded-xl shadow-inner pointer-events-auto" />
+        {/* Left: Result Image and Video */}
+        <div className="flex flex-col items-center gap-6">
+          <div className="print-container relative p-2 bg-zinc-900 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-zinc-800 md:rotate-[-2deg] hover:rotate-0 transition-transform duration-500">
+            <img src={printableImage || image} alt="Final Print" className="print-image max-h-[50vh] md:max-h-[55vh] object-contain rounded-xl shadow-inner pointer-events-auto" />
             <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none rounded-2xl" />
           </div>
-          <p className="text-zinc-500 text-xs mt-4 hidden md:block">แตะค้างที่รูปภาพ หากต้องการเซฟด้วยตัวเอง</p>
+          
+          {videoBlob && (
+            <div className="relative p-2 bg-zinc-900 rounded-2xl border border-zinc-800 w-full max-w-[250px] shadow-xl md:rotate-[3deg]">
+              <div className="absolute -top-3 -right-3 bg-amber-500 text-black text-xs font-bold px-2 py-1 rounded-lg transform rotate-12 z-10">Timelapse 🚀</div>
+               <video 
+                  src={URL.createObjectURL(videoBlob)} 
+                  autoPlay loop muted playsInline 
+                  className="w-full rounded-xl"
+                  ref={v => { if(v) v.playbackRate = 2.0; }}
+               />
+               <button onClick={downloadVideo} className="absolute bottom-4 right-4 p-3 bg-black/60 rounded-full text-white hover:bg-amber-500 transition-colors backdrop-blur-md hover:scale-110">
+                 <Download className="w-5 h-5" />
+               </button>
+            </div>
+          )}
+          <p className="text-zinc-500 text-xs mt-2 hidden md:block">แตะค้างที่รูปภาพ หากต้องการเซฟด้วยตัวเอง</p>
         </div>
 
         {/* Right: Actions */}
         <div className="space-y-6 md:space-y-8 flex flex-col items-center md:items-start text-center md:text-left">
           <div>
-            <h2 className="text-3xl md:text-4xl font-extrabold mb-3 bg-gradient-to-r from-indigo-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent drop-shadow-sm">
-              รูปภาพของคุณพร้อมแล้ว!
+            <h2 
+              className="text-3xl md:text-4xl font-extrabold mb-3 drop-shadow-md"
+              style={{ color: landingConfig?.accentColor || '#d4a055' }}
+            >
+              {landingConfig?.shareTitle || 'รูปภาพของคุณพร้อมแล้ว!'}
             </h2>
-            <p className="text-zinc-400 text-base md:text-lg">สแกนคิวอาร์โค้ดเพื่อเซฟลงมือถือได้เลย หรือกดปุ่มดาวน์โหลดด้านล่าง</p>
+            <p className="text-amber-200/80 text-base md:text-lg">
+              {landingConfig?.shareSubtitle || 'สแกนคิวอาร์โค้ดเพื่อเซฟลงมือถือได้เลย หรือกดปุ่มดาวน์โหลดด้านล่าง'}
+            </p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm">
             <button 
               onClick={handleDownload}
-              className="flex-1 py-4 bg-white text-black rounded-xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-zinc-200 transition-colors shadow-xl shadow-white/10"
+              className="flex-1 py-4 bg-amber-700 text-amber-50 rounded-xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-amber-600 transition-colors shadow-xl"
+              style={{ backgroundColor: landingConfig?.accentColor, color: '#1a0e04' }}
             >
               <Download className="w-5 h-5" />
               ดาวน์โหลด HD
             </button>
             <button 
-              className="flex-1 py-4 bg-zinc-900 border border-zinc-700 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-zinc-800 transition-colors"
-              onClick={() => alert('จำลองระบบพริ้นต์เตอร์ ในระบบจริงจะส่งคำสั่งไปที่เครื่องพิมพ์อัตโนมัติ')}
+              className="flex-1 py-4 bg-black/40 border border-amber-900/50 text-amber-200 rounded-xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-black/60 transition-colors"
+              onClick={handlePrint}
             >
               พิมพ์รูป
             </button>
           </div>
           
-          <p className="text-yellow-500/80 text-xs w-full max-w-sm text-left px-2">
+          <p className="text-amber-500/80 text-xs w-full max-w-sm text-left px-2">
             * หากปุ่มดาวน์โหลดไม่ทำงาน ให้แตะค้างที่รูปภาพด้านซ้าย แล้วเลือก "บันทึกรูปภาพ" (Save Image)
           </p>
 
-          <div className="w-full max-w-sm bg-zinc-900/80 p-5 md:p-6 rounded-2xl border border-zinc-800 backdrop-blur-md flex items-center gap-4 md:gap-6 shadow-2xl">
-            <div className="w-24 h-24 md:w-28 md:h-28 bg-white rounded-xl p-2 flex items-center justify-center shrink-0 relative overflow-hidden">
-              {uploadStatus === 'uploading' && (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-                  <span className="text-[10px] text-zinc-500 font-medium">กำลังอัปโหลด...</span>
-                </div>
-              )}
-              {uploadStatus === 'done' && qrCodeUrl && (
-                <img src={qrCodeUrl} alt="QR Code" className="w-full h-full object-contain animate-in fade-in zoom-in duration-500" />
-              )}
-              {uploadStatus === 'error' && (
-                <div className="flex flex-col items-center gap-1 text-red-500 text-center">
-                  <AlertCircle className="w-6 h-6" />
-                  <span className="text-[9px] font-bold">เชื่อมต่อเซิร์ฟเวอร์ไม่ได้</span>
-                </div>
-              )}
-            </div>
-            <div className="flex-1">
-              <h3 className="font-bold text-base md:text-lg mb-1 flex items-center gap-2">
-                <QrCode className="w-5 h-5 text-indigo-400" />
-                สแกนรับรูปภาพ
-              </h3>
-              <p className="text-xs md:text-sm text-zinc-400 leading-relaxed">
-                เปิดกล้องมือถือสแกนเพื่อโหลดรูป (รูปภาพจะถูกลบอัตโนมัติจาก Cloud)
-              </p>
+          <div className="w-full max-w-sm bg-black/40 p-5 md:p-6 rounded-2xl border border-amber-900/30 backdrop-blur-md flex flex-col gap-4 shadow-2xl">
+            {errorMsg && (
+              <div className="text-amber-500 text-xs bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                {errorMsg}
+              </div>
+            )}
+            <div className="flex items-center gap-4 md:gap-6">
+              <div className="w-24 h-24 md:w-28 md:h-28 bg-white/90 rounded-xl p-2 flex items-center justify-center shrink-0 relative overflow-hidden">
+                {isUploading && (
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="w-6 h-6 text-amber-600 animate-spin" />
+                    <span className="text-[10px] text-amber-800 font-medium">กำลังอัปโหลด...</span>
+                  </div>
+                )}
+                {!isUploading && qrCodeUrl && (
+                  <img src={qrCodeUrl} alt="QR Code" className="w-full h-full object-contain animate-in fade-in zoom-in duration-500" />
+                )}
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-base md:text-lg mb-1 flex items-center gap-2 text-amber-100">
+                  <QrCode className="w-5 h-5 text-amber-500" />
+                  สแกนรับรูปภาพ
+                </h3>
+                <p className="text-xs md:text-sm text-amber-200/60 leading-relaxed">
+                  เปิดกล้องมือถือสแกนเพื่อโหลดรูป
+                </p>
+              </div>
             </div>
           </div>
 
           <button 
             onClick={onDone}
-            className="text-zinc-500 hover:text-white transition-colors underline underline-offset-4 mt-2"
+            className="text-amber-500 hover:text-amber-300 transition-colors underline underline-offset-4 mt-2"
           >
             กลับไปหน้าแรก / ถ่ายใหม่
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function DownloadView() {
+  const params = new URLSearchParams(window.location.search);
+  const imgUrl = params.get('img');
+  const vidUrl = params.get('vid');
+
+  const downloadFile = async (url, filename) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch(err) {
+      window.open(url, '_blank');
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col bg-zinc-950 p-6 items-center min-h-screen text-center justify-center">
+      <h1 className="text-3xl font-bold text-amber-500 mb-2">🎉 รูปของคุณมาแล้ว!</h1>
+      <p className="text-zinc-400 mb-8">บันทึกรูปและวิดีโอลงมือถือได้เลย</p>
+
+      {imgUrl && (
+        <div className="mb-6 flex flex-col items-center">
+          <img src={imgUrl} className="max-w-full w-64 rounded-xl shadow-2xl mb-4 border-2 border-zinc-800" />
+          <button onClick={() => downloadFile(imgUrl, 'photobooth.jpg')} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-full font-bold text-white shadow-lg flex items-center gap-2">
+            <Download className="w-5 h-5" /> โหลดรูปภาพ
+          </button>
+          <p className="text-xs text-zinc-500 mt-2">หรือแตะค้างที่รูปเพื่อบันทึก</p>
+        </div>
+      )}
+
+      {vidUrl && (
+        <div className="mb-6 flex flex-col items-center pt-6 border-t border-zinc-800 w-full max-w-sm">
+          <video src={vidUrl} autoPlay loop muted playsInline className="max-w-full w-48 rounded-xl shadow-2xl mb-4 border-2 border-zinc-800" />
+          <button onClick={() => downloadFile(vidUrl, 'photobooth-timelapse.mp4')} className="px-6 py-3 bg-amber-600 hover:bg-amber-500 rounded-full font-bold text-white shadow-lg flex items-center gap-2">
+            <Download className="w-5 h-5" /> โหลดวิดีโอ Timelapse
+          </button>
+        </div>
+      )}
     </div>
   );
 }
