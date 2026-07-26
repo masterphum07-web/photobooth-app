@@ -6,6 +6,31 @@
 }
 
 body {
-  background-color: var(--color-zinc-950);
-  color: var(--color-zinc-50);
+  background-color: #1a0e04;
+  color: #FFF8DC;
 }
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+}
+
+@keyframes sway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(212, 160, 85, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(212, 160, 85, 0.6), 0 0 80px rgba(212, 160, 85, 0.2); }
+}
+
+.animate-twinkle { animation: twinkle 2s ease-in-out infinite; }
+.animate-float { animation: float 4s ease-in-out infinite; }
+.animate-sway { animation: sway 3s ease-in-out infinite; }
+.animate-glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }

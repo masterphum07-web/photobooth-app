@@ -3,7 +3,7 @@ import {
   Camera, Image as ImageIcon, Wand2, Download, QrCode, 
   Settings, Smile, ChevronRight, Sparkles, RefreshCcw, 
   X, Layers, Share2, Loader2, AlertCircle, ShieldAlert,
-  Plus, Trash2, ImagePlus
+  Plus, Trash2, ImagePlus, Paintbrush
 } from 'lucide-react';
 
 // --- INITIAL CONFIGURATION & ASSETS ---
@@ -64,6 +64,18 @@ export default function App() {
   const [customFrames, setCustomFrames] = useLocalStorage('studio-booth-frames', DEFAULT_FRAMES);
   const [customStickers, setCustomStickers] = useLocalStorage('studio-booth-stickers', DEFAULT_STICKERS);
 
+  const DEFAULT_LANDING_CONFIG = {
+    title: 'Yeehaw Photo Booth',
+    subtitle: 'ถ่ายรูปสไตล์คาวบอย กรอบสวย สติกเกอร์เพียบ!',
+    buttonText: '🤠 แตะเพื่อเริ่มถ่ายรูป',
+    bgColor1: '#1a0e04',
+    bgColor2: '#3d1f00',
+    accentColor: '#d4a055',
+    showStars: true,
+    bgImage: '',
+  };
+  const [landingConfig, setLandingConfig] = useLocalStorage('studio-booth-landing', DEFAULT_LANDING_CONFIG);
+
   const resetSession = () => {
     setPhotos([]);
     setFinalImage(null);
@@ -72,12 +84,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 font-sans overflow-hidden flex flex-col selection:bg-indigo-500/30">
-      {view === 'landing' && <LandingView onStart={() => setView('setup')} onAdmin={() => setView('admin')} />}
+      {view === 'landing' && <LandingView onStart={() => setView('setup')} onAdmin={() => setView('admin')} config={landingConfig} />}
       
       {view === 'admin' && (
         <AdminView 
           frames={customFrames} setFrames={setCustomFrames}
           stickers={customStickers} setStickers={setCustomStickers}
+          landingConfig={landingConfig} setLandingConfig={setLandingConfig}
           onBack={() => setView('landing')} 
         />
       )}
@@ -114,37 +127,80 @@ export default function App() {
 
 // --- VIEWS ---
 
-function LandingView({ onStart, onAdmin }) {
+function LandingView({ onStart, onAdmin, config }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-[100px] animate-pulse" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-fuchsia-600/20 rounded-full blur-[100px] animate-pulse delay-1000" />
+    <div 
+      className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden"
+      style={{
+        background: config.bgImage 
+          ? `url(${config.bgImage}) center/cover no-repeat` 
+          : `linear-gradient(to bottom, ${config.bgColor1}, ${config.bgColor2})`
+      }}
+    >
+      <div 
+        className="absolute inset-0 pointer-events-none" 
+        style={{
+          backgroundColor: config.bgImage ? 'rgba(26, 14, 4, 0.6)' : 'transparent',
+          backgroundImage: config.bgImage ? 'none' : `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E")`
+        }} 
+      />
+
+      <div className="absolute inset-4 sm:inset-8 border-4 border-dashed rounded-3xl pointer-events-none opacity-40 z-0" style={{ borderColor: config.accentColor }} />
+
+      {config.showStars && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+          {Array.from({ length: 25 }).map((_, i) => (
+            <div 
+              key={i}
+              className="absolute bg-white rounded-full animate-twinkle"
+              style={{
+                width: Math.random() * 3 + 1 + 'px',
+                height: Math.random() * 3 + 1 + 'px',
+                top: Math.random() * 100 + '%',
+                left: Math.random() * 100 + '%',
+                animationDelay: `${Math.random() * 2}s`
+              }}
+            />
+          ))}
+        </div>
+      )}
       
-      {/* Admin Button */}
-      <button onClick={onAdmin} className="absolute top-6 right-6 p-3 bg-zinc-900/50 hover:bg-zinc-800 rounded-full backdrop-blur-md text-zinc-400 hover:text-white transition-colors border border-zinc-800 shadow-xl">
-        <ShieldAlert className="w-5 h-5" />
+      <button onClick={onAdmin} className="absolute top-6 right-6 p-3 bg-amber-900/50 hover:bg-amber-800 rounded-full backdrop-blur-md text-amber-200 hover:text-white transition-colors border shadow-xl z-20" style={{ borderColor: config.accentColor }}>
+        <Settings className="w-5 h-5" />
       </button>
 
-      <div className="relative z-10 flex flex-col items-center text-center max-w-2xl">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900/80 border border-zinc-800 text-sm font-medium text-zinc-300 mb-8 backdrop-blur-md shadow-lg">
-          <Sparkles className="w-4 h-4 text-indigo-400" />
-          <span>ระบบประมวลผลภาพขั้นสูง (New Engine)</span>
-        </div>
-        
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 bg-gradient-to-br from-white via-zinc-200 to-zinc-500 bg-clip-text text-transparent">
-          Studio AI <br className="hidden md:block" /> Photo Booth
+      <div className="absolute top-1/4 left-10 text-4xl animate-float z-10" style={{ animationDelay: '0s' }}>🌵</div>
+      <div className="absolute bottom-1/4 right-10 text-4xl animate-float z-10" style={{ animationDelay: '1s' }}>👢</div>
+      <div className="absolute top-1/3 right-20 text-5xl animate-sway z-10" style={{ animationDelay: '0.5s' }}>🤠</div>
+      <div className="absolute bottom-1/3 left-20 text-3xl animate-float z-10" style={{ animationDelay: '1.5s' }}>🐎</div>
+
+      <div className="relative z-10 flex flex-col items-center text-center max-w-2xl mt-12">
+        <h1 
+          className="text-5xl md:text-7xl font-extrabold tracking-wider mb-6 font-serif"
+          style={{ 
+            color: config.accentColor,
+            textShadow: '2px 2px 0px #3d1f00, 4px 4px 0px rgba(0,0,0,0.5), 0 0 20px rgba(212,160,85,0.4)'
+          }}
+        >
+          {config.title}
         </h1>
         
-        <p className="text-lg text-zinc-400 mb-12 max-w-lg leading-relaxed">
-          ถ่ายรูปสติกเกอร์พร้อมกรอบและสติกเกอร์ที่กำหนดเองได้ Export ความละเอียดสูง โหลดภาพผ่านมือถือได้ทันที
+        <p className="text-xl md:text-2xl mb-12 max-w-lg leading-relaxed font-medium" style={{ color: '#FFF8DC', textShadow: '1px 1px 4px rgba(0,0,0,0.8)' }}>
+          {config.subtitle}
         </p>
         
         <button 
           onClick={onStart}
-          className="group relative inline-flex items-center justify-center gap-3 px-10 py-5 bg-white text-zinc-950 rounded-full text-xl font-bold transition-transform hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(255,255,255,0.2)]"
+          className="group relative inline-flex items-center justify-center gap-3 px-10 py-5 rounded-full text-xl font-bold transition-all hover:scale-105 active:scale-95 animate-glow-pulse border-2 overflow-hidden"
+          style={{ 
+            backgroundColor: '#3d1f00',
+            color: config.accentColor,
+            borderColor: config.accentColor
+          }}
         >
-          <span>แตะหน้าจอเพื่อเริ่มต้น</span>
-          <ChevronRight className="w-6 h-6 transition-transform group-hover:translate-x-1" />
+          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E")` }} />
+          <span className="relative z-10 drop-shadow-md">{config.buttonText}</span>
+          <ChevronRight className="w-6 h-6 relative z-10 transition-transform group-hover:translate-x-1" />
         </button>
       </div>
     </div>
@@ -152,7 +208,7 @@ function LandingView({ onStart, onAdmin }) {
 }
 
 // --- NEW: ADMIN DASHBOARD ---
-function AdminView({ frames, setFrames, stickers, setStickers, onBack }) {
+function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, setLandingConfig, onBack }) {
   const [newSticker, setNewSticker] = useState('');
   const [newFrameName, setNewFrameName] = useState('');
   const [newFrameColor, setNewFrameColor] = useState('#ff0000');
@@ -205,7 +261,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, onBack }) {
   };
 
   const exportSettings = () => {
-    const data = JSON.stringify({ frames, stickers });
+    const data = JSON.stringify({ frames, stickers, landingConfig });
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -224,6 +280,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, onBack }) {
         const data = JSON.parse(event.target.result);
         if (data.frames) setFrames(data.frames);
         if (data.stickers) setStickers(data.stickers);
+        if (data.landingConfig) setLandingConfig(data.landingConfig);
         alert("โหลดการตั้งค่าสำเร็จ!");
       } catch (err) {
         alert("ไฟล์ไม่ถูกต้อง");
@@ -257,6 +314,86 @@ function AdminView({ frames, setFrames, stickers, setStickers, onBack }) {
       </header>
 
       <div className="grid md:grid-cols-2 gap-12 max-w-6xl mx-auto w-full">
+        {/* Landing Page Customization */}
+        <div className="md:col-span-2 space-y-6 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
+          <h3 className="text-xl font-semibold flex items-center gap-2"><Paintbrush className="text-amber-400"/> ตกแต่งหน้าแรก (Landing Page Design)</h3>
+          
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 space-y-4">
+              <div>
+                <label className="text-xs text-zinc-400 mb-1 block">ชื่อหน้าแรก (Title)</label>
+                <input type="text" value={landingConfig.title} onChange={e => setLandingConfig({...landingConfig, title: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 mb-1 block">คำอธิบาย (Subtitle)</label>
+                <input type="text" value={landingConfig.subtitle} onChange={e => setLandingConfig({...landingConfig, subtitle: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 mb-1 block">ข้อความปุ่ม (Button Text)</label>
+                <input type="text" value={landingConfig.buttonText} onChange={e => setLandingConfig({...landingConfig, buttonText: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">สีพื้นหลัง 1</label>
+                  <input type="color" value={landingConfig.bgColor1} onChange={e => setLandingConfig({...landingConfig, bgColor1: e.target.value})} className="w-full h-10 rounded cursor-pointer" />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">สีพื้นหลัง 2</label>
+                  <input type="color" value={landingConfig.bgColor2} onChange={e => setLandingConfig({...landingConfig, bgColor2: e.target.value})} className="w-full h-10 rounded cursor-pointer" />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">สีเน้น (Accent)</label>
+                  <input type="color" value={landingConfig.accentColor} onChange={e => setLandingConfig({...landingConfig, accentColor: e.target.value})} className="w-full h-10 rounded cursor-pointer" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="showStars" checked={landingConfig.showStars} onChange={e => setLandingConfig({...landingConfig, showStars: e.target.checked})} className="w-4 h-4 accent-amber-500" />
+                <label htmlFor="showStars" className="text-sm text-zinc-300">แสดงดาว (Show Stars)</label>
+              </div>
+              <div className="flex gap-2 items-center">
+                <label className="bg-amber-600/20 hover:bg-amber-600/40 text-amber-400 border border-amber-500/50 cursor-pointer rounded-xl px-4 py-2 text-sm font-bold transition-colors flex items-center justify-center gap-2">
+                  <ImagePlus className="w-4 h-4"/> อัปโหลดพื้นหลัง
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, (data) => setLandingConfig({...landingConfig, bgImage: data}))} />
+                </label>
+                {landingConfig.bgImage && (
+                  <button onClick={() => setLandingConfig({...landingConfig, bgImage: ''})} className="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/50 rounded-xl text-sm font-bold hover:bg-red-500/40 transition-colors">
+                    ลบพื้นหลัง
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            {/* Live Preview */}
+            <div className="flex flex-col items-center justify-center p-4 bg-zinc-800 rounded-xl border border-zinc-700">
+              <span className="text-xs text-zinc-400 mb-2">Live Preview</span>
+              <div 
+                className="w-[200px] h-[120px] rounded-lg relative overflow-hidden flex flex-col items-center justify-center border-2 border-dashed"
+                style={{
+                  borderColor: landingConfig.accentColor,
+                  background: landingConfig.bgImage 
+                    ? `url(${landingConfig.bgImage}) center/cover no-repeat` 
+                    : `linear-gradient(to bottom, ${landingConfig.bgColor1}, ${landingConfig.bgColor2})`
+                }}
+              >
+                {landingConfig.bgImage && <div className="absolute inset-0 bg-black/40" />}
+                <div className="relative z-10 text-center scale-50 origin-center w-[350px]">
+                  <h4 className="font-serif font-bold text-xl mb-1" style={{ color: landingConfig.accentColor }}>{landingConfig.title}</h4>
+                  <div 
+                    className="mx-auto px-4 py-2 rounded-full text-sm font-bold border-2 inline-block"
+                    style={{ 
+                      backgroundColor: '#3d1f00',
+                      color: landingConfig.accentColor,
+                      borderColor: landingConfig.accentColor
+                    }}
+                  >
+                    {landingConfig.buttonText}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Manage Stickers */}
         <div className="space-y-6 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
           <h3 className="text-xl font-semibold flex items-center gap-2"><Smile className="text-indigo-400"/> จัดการสติกเกอร์</h3>
@@ -364,9 +501,9 @@ function SetupView({ config, setConfig, onNext, onBack }) {
 
       <div className="grid md:grid-cols-2 gap-12 flex-1">
         <div className="space-y-6">
-          <div className="flex items-center gap-2 text-lg font-medium border-b border-zinc-800 pb-2">
-            <Layers className="w-5 h-5 text-indigo-400" />
-            <h3>เลือกรูปแบบกรอบ (Layout)</h3>
+          <div className="flex items-center gap-2 text-lg font-medium border-b border-zinc-800 pb-2 text-amber-500">
+            <Layers className="w-5 h-5" />
+            <h3 className="text-zinc-50">เลือกรูปแบบกรอบ (Layout)</h3>
           </div>
           <div className="grid grid-cols-2 gap-4">
             {Object.values(LAYOUTS).map(layout => (
@@ -375,7 +512,7 @@ function SetupView({ config, setConfig, onNext, onBack }) {
                 onClick={() => setConfig({ ...config, layout })}
                 className={`flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all ${
                   config.layout.id === layout.id 
-                    ? 'border-indigo-500 bg-indigo-500/10 shadow-[0_0_20px_rgba(99,102,241,0.2)]' 
+                    ? 'border-amber-500 bg-amber-500/10 shadow-[0_0_20px_rgba(245,158,11,0.2)]' 
                     : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
                 }`}
               >
@@ -394,9 +531,9 @@ function SetupView({ config, setConfig, onNext, onBack }) {
         </div>
 
         <div className="space-y-6">
-          <div className="flex items-center gap-2 text-lg font-medium border-b border-zinc-800 pb-2">
-            <Wand2 className="w-5 h-5 text-fuchsia-400" />
-            <h3>เลือกฟิลเตอร์</h3>
+          <div className="flex items-center gap-2 text-lg font-medium border-b border-zinc-800 pb-2 text-orange-400">
+            <Wand2 className="w-5 h-5" />
+            <h3 className="text-zinc-50">เลือกฟิลเตอร์</h3>
           </div>
           <div className="grid grid-cols-3 gap-4">
             {FILTERS.map(filter => (
@@ -405,7 +542,7 @@ function SetupView({ config, setConfig, onNext, onBack }) {
                 onClick={() => setConfig({ ...config, filter })}
                 className={`flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all ${
                   config.filter.id === filter.id 
-                    ? 'border-fuchsia-500 bg-fuchsia-500/10 shadow-[0_0_20px_rgba(217,70,239,0.2)]' 
+                    ? 'border-orange-500 bg-orange-500/10 shadow-[0_0_20px_rgba(249,115,22,0.2)]' 
                     : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
                 }`}
               >
@@ -423,7 +560,7 @@ function SetupView({ config, setConfig, onNext, onBack }) {
       <div className="py-8 flex justify-end">
         <button 
           onClick={onNext}
-          className="px-10 py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full text-xl font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-3 shadow-[0_0_30px_rgba(99,102,241,0.4)]"
+          className="px-10 py-5 bg-amber-700 hover:bg-amber-600 text-white rounded-full text-xl font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-3 shadow-[0_0_30px_rgba(217,119,6,0.4)]"
         >
           <Camera className="w-6 h-6" />
           เข้าตู้ถ่ายรูป
