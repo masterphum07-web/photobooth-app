@@ -204,15 +204,55 @@ function AdminView({ frames, setFrames, stickers, setStickers, onBack }) {
     setNewFrameName('');
   };
 
+  const exportSettings = () => {
+    const data = JSON.stringify({ frames, stickers });
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'photobooth-settings.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importSettings = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        if (data.frames) setFrames(data.frames);
+        if (data.stickers) setStickers(data.stickers);
+        alert("โหลดการตั้งค่าสำเร็จ!");
+      } catch (err) {
+        alert("ไฟล์ไม่ถูกต้อง");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = null; // reset input
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-zinc-950 p-6 md:p-12 overflow-y-auto">
-      <header className="flex items-center gap-4 mb-10 border-b border-zinc-800 pb-6">
-        <button onClick={onBack} className="p-3 bg-zinc-900 hover:bg-zinc-800 rounded-full transition-colors">
-          <X className="w-6 h-6" />
-        </button>
-        <div>
-          <h2 className="text-2xl font-bold">ระบบหลังบ้าน (Admin Dashboard)</h2>
-          <p className="text-zinc-400 text-sm mt-1">จัดการเทมเพลตและสติกเกอร์ ข้อมูลจะถูกบันทึกในอุปกรณ์นี้</p>
+      <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-10 border-b border-zinc-800 pb-6">
+        <div className="flex items-center gap-4">
+          <button onClick={onBack} className="p-3 bg-zinc-900 hover:bg-zinc-800 rounded-full transition-colors">
+            <X className="w-6 h-6" />
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold">ระบบหลังบ้าน (Admin Dashboard)</h2>
+            <p className="text-zinc-400 text-sm mt-1">จัดการเทมเพลตและสติกเกอร์ ข้อมูลจะถูกบันทึกในอุปกรณ์นี้</p>
+          </div>
+        </div>
+        <div className="flex gap-3 w-full md:w-auto">
+          <label className="flex-1 md:flex-none cursor-pointer bg-zinc-800 hover:bg-zinc-700 px-4 py-3 md:py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors">
+            <Download className="w-4 h-4 rotate-180" /> นำเข้า (Import)
+            <input type="file" accept=".json" className="hidden" onChange={importSettings} />
+          </label>
+          <button onClick={exportSettings} className="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-700 px-4 py-3 md:py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors">
+            <Download className="w-4 h-4" /> บันทึกการตั้งค่า (Export)
+          </button>
         </div>
       </header>
 
