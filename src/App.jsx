@@ -385,20 +385,6 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
                     <label className="text-xs text-zinc-400 mb-1 block">ข้อความปุ่ม (Button Text)</label>
                     <input type="text" value={landingConfig.buttonText} onChange={e => setLandingConfig({...landingConfig, buttonText: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
                   </div>
-                  <div>
-                    <label className="text-xs text-zinc-400 mb-1 block">ข้อความลายน้ำ (Brand Text)</label>
-                    <input type="text" value={landingConfig.brandText || 'STUDIO BOOTH'} onChange={e => setLandingConfig({...landingConfig, brandText: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-zinc-400 mb-1 block">ฟอนต์ตัวอักษร (Font Family)</label>
-                    <select value={landingConfig.fontFamily || 'Kanit'} onChange={e => setLandingConfig({...landingConfig, fontFamily: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500">
-                      <option value="Kanit">Kanit (มาตรฐาน)</option>
-                      <option value="Prompt">Prompt (โมเดิร์น)</option>
-                      <option value="Mali">Mali (ลายมือ)</option>
-                      <option value="Chonburi">Chonburi (คลาสสิก)</option>
-                      <option value="Sarabun">Sarabun (ทางการ)</option>
-                    </select>
-                  </div>
                   <div className="pt-4 border-t border-zinc-800">
                     <label className="text-xs text-zinc-400 mb-1 block">หัวข้อหน้าสแกนรูป (Share Title)</label>
                     <input type="text" value={landingConfig.shareTitle || 'รูปภาพของคุณพร้อมแล้ว!'} onChange={e => setLandingConfig({...landingConfig, shareTitle: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-500 mb-4" />
@@ -495,6 +481,20 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
                      <span className="text-blue-400">{photoConfig?.padding || 5}</span>
                    </label>
                    <input type="range" min="0" max="20" value={photoConfig?.padding || 0} onChange={e => setPhotoConfig({...photoConfig, padding: parseInt(e.target.value)})} className="w-full accent-blue-500" />
+                 </div>
+                 <div className="pt-4 border-t border-zinc-800">
+                   <label className="text-xs text-zinc-400 mb-1 block">ข้อความใต้รูป (Brand Text)</label>
+                   <input type="text" value={landingConfig.brandText || 'STUDIO BOOTH'} onChange={e => setLandingConfig({...landingConfig, brandText: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+                 </div>
+                 <div>
+                   <label className="text-xs text-zinc-400 mb-1 block">ฟอนต์ตัวอักษร (Font Family)</label>
+                   <select value={landingConfig.fontFamily || 'Kanit'} onChange={e => setLandingConfig({...landingConfig, fontFamily: e.target.value})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-blue-500">
+                     <option value="Kanit">Kanit (มาตรฐาน)</option>
+                     <option value="Prompt">Prompt (โมเดิร์น)</option>
+                     <option value="Mali">Mali (ลายมือ)</option>
+                     <option value="Chonburi">Chonburi (คลาสสิก)</option>
+                     <option value="Sarabun">Sarabun (ทางการ)</option>
+                   </select>
                  </div>
                </div>
             </div>
