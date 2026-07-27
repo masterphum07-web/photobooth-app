@@ -928,6 +928,20 @@ function BoothView({ config, onComplete, onCancel }) {
           <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white/60 rounded-br-xl" />
         </div>
 
+        {status === 'review' && (
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-50">
+            <button 
+              onClick={handleFinish}
+              className="px-10 py-4 rounded-full bg-blue-600 text-white font-bold text-xl hover:bg-blue-500 hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(59,130,246,0.6)] border border-blue-400/50"
+            >
+              ✅ ไปตกแต่งรูป (Continue)
+            </button>
+            <span className="text-white text-sm font-bold tracking-wider drop-shadow-md bg-black/60 px-5 py-2 rounded-full backdrop-blur-md">
+              💡 แตะที่รูปด้านล่างเพื่อถ่ายใหม่ (Retake)
+            </span>
+          </div>
+        )}
+
         {status === 'idle' && (
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-50">
             <button 
@@ -1344,7 +1358,7 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
 
             {/* Photos Grid */}
             <div 
-              className={`flex-1 grid ${config.layout.cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
+              className={`flex-1 grid relative z-10 ${config.layout.cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
               style={{ gap: `${photoConfig?.spacing ?? 5}%` }}
             >
               {photos.map((photo, i) => (
