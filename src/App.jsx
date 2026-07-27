@@ -3,7 +3,7 @@ import {
   Camera, Image as ImageIcon, Wand2, Download, QrCode, 
   Settings, Smile, ChevronRight, Sparkles, RefreshCcw, 
   X, Layers, Share2, Loader2, AlertCircle, ShieldAlert,
-  Plus, Trash2, ImagePlus, Paintbrush, MonitorSmartphone, LayoutTemplate, Square
+  Plus, Trash2, ImagePlus, Paintbrush, MonitorSmartphone, LayoutTemplate, Square, Move, Maximize2, Copy, Grid3X3
 } from 'lucide-react';
 import QRCode from 'qrcode';
 
@@ -95,6 +95,7 @@ export default function App() {
   const [landingConfig, setLandingConfig] = useLocalStorage('studio-booth-landing', DEFAULT_LANDING_CONFIG);
   const DEFAULT_PHOTO_CONFIG = { borderRadius: 0, padding: 5, spacing: 5 };
   const [photoConfig, setPhotoConfig] = useLocalStorage('studio-booth-photo', DEFAULT_PHOTO_CONFIG);
+  const [customLayouts, setCustomLayouts] = useLocalStorage('studio-booth-custom-layouts', []);
 
   useEffect(() => {
     const font = landingConfig?.fontFamily || 'Kanit';
@@ -250,7 +251,369 @@ function LandingView({ onStart, onAdmin, config }) {
 }
 
 // --- NEW: ADMIN DASHBOARD ---
-function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, setLandingConfig, cloudConfig, setCloudConfig, photoConfig, setPhotoConfig, onBack }) {
+
+// --- CUSTOM LAYOUT EDITOR ---
+const CANVAS_PRESETS = [
+  { name: '4×6 แนวตั้ง', vW: 1200, vH: 1800 },
+  { name: '2×6 สตริป', vW: 800, vH: 2400 },
+  { name: '4×4 สี่เหลี่ยม', vW: 1600, vH: 1600 },
+  { name: '4×6 แนวนอน', vW: 1800, vH: 1200 },
+];
+
+const LAYOUT_TEMPLATES = [
+  { name: '2 รูปเท่ากัน (บน-ล่าง)', vW: 1200, vH: 1800, slots: [
+    { id: 0, x: 5, y: 5, w: 90, h: 42 },
+    { id: 1, x: 5, y: 52, w: 90, h: 42 },
+  ]},
+  { name: '4 รูป (2×2)', vW: 1600, vH: 1600, slots: [
+    { id: 0, x: 3, y: 3, w: 46, h: 44 },
+    { id: 1, x: 51, y: 3, w: 46, h: 44 },
+    { id: 2, x: 3, y: 50, w: 46, h: 44 },
+    { id: 3, x: 51, y: 50, w: 46, h: 44 },
+  ]},
+  { name: '1 ใหญ่ + 2 เล็ก', vW: 1200, vH: 1800, slots: [
+    { id: 0, x: 5, y: 5, w: 90, h: 55 },
+    { id: 1, x: 5, y: 63, w: 43, h: 32 },
+    { id: 2, x: 52, y: 63, w: 43, h: 32 },
+  ]},
+  { name: '3 รูปสตริป', vW: 800, vH: 2400, slots: [
+    { id: 0, x: 5, y: 3, w: 90, h: 28 },
+    { id: 1, x: 5, y: 34, w: 90, h: 28 },
+    { id: 2, x: 5, y: 65, w: 90, h: 28 },
+  ]},
+  { name: '1 ใหญ่ + 3 เล็ก', vW: 1600, vH: 1600, slots: [
+    { id: 0, x: 3, y: 3, w: 60, h: 60 },
+    { id: 1, x: 66, y: 3, w: 31, h: 28 },
+    { id: 2, x: 66, y: 34, w: 31, h: 28 },
+    { id: 3, x: 3, y: 66, w: 94, h: 28 },
+  ]},
+];
+
+function LayoutEditorTab({ customLayouts, setCustomLayouts }) {
+  const [editingLayout, setEditingLayout] = useState(null); // null = list mode, object = editing
+  const [layoutName, setLayoutName] = useState('');
+  const [canvasSize, setCanvasSize] = useState({ vW: 1200, vH: 1800 });
+  const [slots, setSlots] = useState([]);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [dragState, setDragState] = useState(null); // { slotId, type: 'move'|'resize', startX, startY, origSlot }
+  const canvasRef = useRef(null);
+
+  const startNewLayout = (template) => {
+    if (template) {
+      setLayoutName(template.name);
+      setCanvasSize({ vW: template.vW, vH: template.vH });
+      setSlots(template.slots.map(s => ({...s})));
+    } else {
+      setLayoutName('เลย์เอาต์ใหม่');
+      setCanvasSize({ vW: 1200, vH: 1800 });
+      setSlots([{ id: 0, x: 10, y: 10, w: 80, h: 35 }]);
+    }
+    setEditingLayout('new');
+    setSelectedSlot(null);
+  };
+
+  const editLayout = (layout) => {
+    setLayoutName(layout.name);
+    setCanvasSize({ vW: layout.vW, vH: layout.vH });
+    setSlots(layout.slots.map(s => ({...s})));
+    setEditingLayout(layout.id);
+    setSelectedSlot(null);
+  };
+
+  const addSlot = () => {
+    const newId = slots.length > 0 ? Math.max(...slots.map(s => s.id)) + 1 : 0;
+    setSlots([...slots, { id: newId, x: 20, y: 20, w: 40, h: 30 }]);
+  };
+
+  const deleteSlot = (id) => {
+    setSlots(slots.filter(s => s.id !== id));
+    if (selectedSlot === id) setSelectedSlot(null);
+  };
+
+  const duplicateSlot = (id) => {
+    const orig = slots.find(s => s.id === id);
+    if (!orig) return;
+    const newId = Math.max(...slots.map(s => s.id)) + 1;
+    setSlots([...slots, { ...orig, id: newId, x: Math.min(orig.x + 5, 90), y: Math.min(orig.y + 5, 90) }]);
+  };
+
+  const saveLayout = () => {
+    if (!layoutName.trim()) return;
+    const layoutData = {
+      id: editingLayout === 'new' ? 'custom_' + Date.now() : editingLayout,
+      name: layoutName,
+      vW: canvasSize.vW,
+      vH: canvasSize.vH,
+      slots: slots.map((s, i) => ({ ...s, id: i })),
+    };
+    
+    if (editingLayout === 'new') {
+      setCustomLayouts([...customLayouts, layoutData]);
+    } else {
+      setCustomLayouts(customLayouts.map(l => l.id === editingLayout ? layoutData : l));
+    }
+    setEditingLayout(null);
+  };
+
+  const deleteLayout = (id) => {
+    setCustomLayouts(customLayouts.filter(l => l.id !== id));
+  };
+
+  // --- Pointer handlers for drag/resize ---
+  const handlePointerDown = (e, slotId, type) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedSlot(slotId);
+    const rect = canvasRef.current.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const slot = slots.find(s => s.id === slotId);
+    setDragState({
+      slotId,
+      type,
+      startX: clientX,
+      startY: clientY,
+      origSlot: { ...slot },
+      canvasW: rect.width,
+      canvasH: rect.height,
+    });
+  };
+
+  const handlePointerMove = useCallback((e) => {
+    if (!dragState) return;
+    e.preventDefault();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const dx = ((clientX - dragState.startX) / dragState.canvasW) * 100;
+    const dy = ((clientY - dragState.startY) / dragState.canvasH) * 100;
+    const orig = dragState.origSlot;
+
+    setSlots(prev => prev.map(s => {
+      if (s.id !== dragState.slotId) return s;
+      if (dragState.type === 'move') {
+        return { ...s, x: Math.max(0, Math.min(100 - s.w, orig.x + dx)), y: Math.max(0, Math.min(100 - s.h, orig.y + dy)) };
+      } else {
+        const newW = Math.max(10, Math.min(100 - orig.x, orig.w + dx));
+        const newH = Math.max(10, Math.min(100 - orig.y, orig.h + dy));
+        return { ...s, w: newW, h: newH };
+      }
+    }));
+  }, [dragState]);
+
+  const handlePointerUp = useCallback(() => {
+    setDragState(null);
+  }, []);
+
+  useEffect(() => {
+    if (dragState) {
+      window.addEventListener('mousemove', handlePointerMove, { passive: false });
+      window.addEventListener('mouseup', handlePointerUp);
+      window.addEventListener('touchmove', handlePointerMove, { passive: false });
+      window.addEventListener('touchend', handlePointerUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handlePointerMove);
+      window.removeEventListener('mouseup', handlePointerUp);
+      window.removeEventListener('touchmove', handlePointerMove);
+      window.removeEventListener('touchend', handlePointerUp);
+    };
+  }, [dragState, handlePointerMove, handlePointerUp]);
+
+  // --- LIST VIEW ---
+  if (!editingLayout) {
+    return (
+      <div className="space-y-6 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
+        <h3 className="text-xl font-semibold flex items-center gap-2"><Grid3X3 className="text-green-400"/> จัดเลย์เอาต์ (Custom Layout Editor)</h3>
+        
+        {/* Templates */}
+        <div>
+          <h4 className="text-sm font-bold text-zinc-400 mb-3 uppercase tracking-wider">เริ่มจากเทมเพลต</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {LAYOUT_TEMPLATES.map((t, i) => (
+              <button key={i} onClick={() => startNewLayout(t)} className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-green-500 rounded-xl p-3 transition-all group">
+                <div className="w-full aspect-[3/4] bg-zinc-900 rounded-lg relative mb-2 overflow-hidden">
+                  {t.slots.map((s, j) => (
+                    <div key={j} className="absolute bg-green-500/30 border border-green-500/60 rounded-sm flex items-center justify-center text-green-300 text-xs font-bold group-hover:bg-green-500/50 transition-colors" style={{ left: s.x + '%', top: s.y + '%', width: s.w + '%', height: s.h + '%' }}>
+                      {j + 1}
+                    </div>
+                  ))}
+                </div>
+                <span className="text-xs text-zinc-300 font-medium">{t.name}</span>
+              </button>
+            ))}
+            <button onClick={() => startNewLayout(null)} className="bg-zinc-800 hover:bg-zinc-700 border-2 border-dashed border-zinc-600 hover:border-green-500 rounded-xl p-3 transition-all flex flex-col items-center justify-center gap-2 min-h-[140px]">
+              <Plus className="w-8 h-8 text-zinc-500" />
+              <span className="text-xs text-zinc-400">สร้างเอง</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Saved Layouts */}
+        {customLayouts.length > 0 && (
+          <div>
+            <h4 className="text-sm font-bold text-zinc-400 mb-3 uppercase tracking-wider">เลย์เอาต์ที่บันทึกไว้</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {customLayouts.map(l => (
+                <div key={l.id} className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 relative group">
+                  <div className="w-full aspect-[3/4] bg-zinc-900 rounded-lg relative mb-2 overflow-hidden cursor-pointer" onClick={() => editLayout(l)}>
+                    {l.slots.map((s, j) => (
+                      <div key={j} className="absolute bg-blue-500/30 border border-blue-500/60 rounded-sm flex items-center justify-center text-blue-300 text-xs font-bold" style={{ left: s.x + '%', top: s.y + '%', width: s.w + '%', height: s.h + '%' }}>
+                        {j + 1}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-zinc-300 font-medium truncate">{l.name}</span>
+                    <div className="flex gap-1">
+                      <button onClick={() => editLayout(l)} className="p-1 text-zinc-500 hover:text-blue-400 transition-colors"><Settings className="w-4 h-4" /></button>
+                      <button onClick={() => deleteLayout(l.id)} className="p-1 text-zinc-500 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-zinc-500">{l.slots.length} รูป • {l.vW}×{l.vH}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // --- EDITOR VIEW ---
+  const aspect = canvasSize.vW / canvasSize.vH;
+
+  return (
+    <div className="space-y-4 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <button onClick={() => setEditingLayout(null)} className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors text-sm">
+          <ChevronRight className="w-4 h-4 rotate-180" /> กลับ
+        </button>
+        <h3 className="text-lg font-semibold text-green-400">แก้ไขเลย์เอาต์</h3>
+        <button onClick={saveLayout} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold text-sm transition-colors shadow-lg shadow-green-600/20">
+          💾 บันทึก
+        </button>
+      </div>
+
+      {/* Settings Row */}
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-[150px]">
+          <label className="text-xs text-zinc-400 mb-1 block">ชื่อเลย์เอาต์</label>
+          <input type="text" value={layoutName} onChange={e => setLayoutName(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-green-500" />
+        </div>
+        <div>
+          <label className="text-xs text-zinc-400 mb-1 block">ขนาด Canvas</label>
+          <select value={canvasSize.vW + 'x' + canvasSize.vH} onChange={e => { const [w,h] = e.target.value.split('x').map(Number); setCanvasSize({vW:w, vH:h}); }} className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-green-500">
+            {CANVAS_PRESETS.map(p => <option key={p.name} value={p.vW + 'x' + p.vH}>{p.name} ({p.vW}×{p.vH})</option>)}
+          </select>
+        </div>
+        <button onClick={addSlot} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-1">
+          <Plus className="w-4 h-4"/> เพิ่มช่อง
+        </button>
+      </div>
+
+      {/* Canvas Editor */}
+      <div className="grid md:grid-cols-[1fr_250px] gap-4">
+        <div className="flex items-center justify-center bg-zinc-950 rounded-xl p-4 border border-zinc-800 min-h-[400px]">
+          <div
+            ref={canvasRef}
+            className="bg-white relative shadow-2xl select-none"
+            style={{ aspectRatio: aspect, width: aspect >= 1 ? '100%' : 'auto', height: aspect < 1 ? '100%' : 'auto', maxWidth: '100%', maxHeight: '70vh' }}
+            onClick={() => setSelectedSlot(null)}
+          >
+            {slots.map((slot, idx) => (
+              <div
+                key={slot.id}
+                className={"absolute border-2 flex items-center justify-center cursor-move transition-shadow " + (selectedSlot === slot.id ? 'border-green-500 shadow-lg shadow-green-500/30 z-20' : 'border-blue-400/70 hover:border-blue-300 z-10')}
+                style={{
+                  left: slot.x + '%', top: slot.y + '%', width: slot.w + '%', height: slot.h + '%',
+                  background: selectedSlot === slot.id ? 'rgba(34,197,94,0.15)' : 'rgba(59,130,246,0.1)',
+                }}
+                onMouseDown={e => handlePointerDown(e, slot.id, 'move')}
+                onTouchStart={e => handlePointerDown(e, slot.id, 'move')}
+                onClick={e => { e.stopPropagation(); setSelectedSlot(slot.id); }}
+              >
+                <span className={"font-black text-2xl pointer-events-none " + (selectedSlot === slot.id ? 'text-green-600' : 'text-blue-500/60')}>{idx + 1}</span>
+                
+                {/* Delete button */}
+                <button
+                  className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 hover:bg-red-400 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-lg z-30"
+                  onMouseDown={e => e.stopPropagation()}
+                  onTouchStart={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); deleteSlot(slot.id); }}
+                >×</button>
+
+                {/* Resize handle */}
+                <div
+                  className={"absolute bottom-0 right-0 w-5 h-5 cursor-se-resize z-30 " + (selectedSlot === slot.id ? 'bg-green-500' : 'bg-blue-500')}
+                  style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}
+                  onMouseDown={e => handlePointerDown(e, slot.id, 'resize')}
+                  onTouchStart={e => handlePointerDown(e, slot.id, 'resize')}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Slot List Panel */}
+        <div className="bg-zinc-800/50 rounded-xl border border-zinc-700 p-3 space-y-2 overflow-y-auto max-h-[70vh]">
+          <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">ช่องรูปทั้งหมด ({slots.length})</h4>
+          {slots.map((slot, idx) => (
+            <div key={slot.id} onClick={() => setSelectedSlot(slot.id)} className={"flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors " + (selectedSlot === slot.id ? 'bg-green-500/20 border border-green-500/50' : 'bg-zinc-900 border border-transparent hover:border-zinc-600')}>
+              <span className={"w-7 h-7 rounded-md flex items-center justify-center font-bold text-sm " + (selectedSlot === slot.id ? 'bg-green-500 text-white' : 'bg-zinc-700 text-zinc-300')}>{idx+1}</span>
+              <div className="flex-1 min-w-0">
+                <span className="text-xs text-zinc-300">Photo {idx+1}</span>
+                <div className="text-[10px] text-zinc-500">{Math.round(slot.w)}% × {Math.round(slot.h)}%</div>
+              </div>
+              <div className="flex gap-1">
+                <button onClick={e => { e.stopPropagation(); duplicateSlot(slot.id); }} className="p-1 text-zinc-500 hover:text-blue-400"><Copy className="w-3 h-3" /></button>
+                <button onClick={e => { e.stopPropagation(); deleteSlot(slot.id); }} className="p-1 text-zinc-500 hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
+              </div>
+            </div>
+          ))}
+          {slots.length === 0 && (
+            <div className="text-center py-8 text-zinc-500 text-sm">
+              กดปุ่ม "+ เพิ่มช่อง" เพื่อเริ่มต้น
+            </div>
+          )}
+
+          {/* Quick precision editing for selected slot */}
+          {selectedSlot !== null && slots.find(s => s.id === selectedSlot) && (() => {
+            const s = slots.find(sl => sl.id === selectedSlot);
+            const updateSlot = (field, val) => setSlots(prev => prev.map(sl => sl.id === selectedSlot ? { ...sl, [field]: val } : sl));
+            return (
+              <div className="mt-4 p-3 bg-zinc-900 rounded-lg border border-green-500/30 space-y-2">
+                <h5 className="text-xs font-bold text-green-400">ปรับค่าละเอียด</h5>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-zinc-500">X (%)</label>
+                    <input type="number" min="0" max="100" step="1" value={Math.round(s.x)} onChange={e => updateSlot('x', Number(e.target.value))} className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-white text-xs" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500">Y (%)</label>
+                    <input type="number" min="0" max="100" step="1" value={Math.round(s.y)} onChange={e => updateSlot('y', Number(e.target.value))} className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-white text-xs" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500">กว้าง (%)</label>
+                    <input type="number" min="5" max="100" step="1" value={Math.round(s.w)} onChange={e => updateSlot('w', Number(e.target.value))} className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-white text-xs" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500">สูง (%)</label>
+                    <input type="number" min="5" max="100" step="1" value={Math.round(s.h)} onChange={e => updateSlot('h', Number(e.target.value))} className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-white text-xs" />
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+
+      <div className="text-xs text-zinc-500 text-center">💡 ลากช่องรูปเพื่อย้ายตำแหน่ง • ลากสามเหลี่ยมมุมขวาล่างเพื่อปรับขนาด • กด × เพื่อลบ</div>
+    </div>
+  );
+}
+
+function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, setLandingConfig, cloudConfig, setCloudConfig, photoConfig, setPhotoConfig, customLayouts, setCustomLayouts, onBack }) {
   const [activeTab, setActiveTab] = useState('landing');
   const [previewLayout, setPreviewLayout] = useState(LAYOUTS.strip);
   const [newSticker, setNewSticker] = useState('');
@@ -363,6 +726,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
         <button onClick={() => setActiveTab('photo')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'photo' ? 'bg-zinc-800 text-blue-400 border-b-2 border-blue-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><LayoutTemplate className="w-4 h-4"/> ตกแต่งรูปภาพ</button>
         <button onClick={() => setActiveTab('frames')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'frames' ? 'bg-zinc-800 text-fuchsia-400 border-b-2 border-fuchsia-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><Square className="w-4 h-4"/> กรอบรูป</button>
         <button onClick={() => setActiveTab('stickers')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'stickers' ? 'bg-zinc-800 text-indigo-400 border-b-2 border-indigo-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><Smile className="w-4 h-4"/> สติกเกอร์</button>
+        <button onClick={() => setActiveTab('layouts')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'layouts' ? 'bg-zinc-800 text-green-400 border-b-2 border-green-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><Grid3X3 className="w-4 h-4"/> จัดเลย์เอาต์</button>
         <button onClick={() => setActiveTab('cloud')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'cloud' ? 'bg-zinc-800 text-zinc-100 border-b-2 border-zinc-100' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><MonitorSmartphone className="w-4 h-4"/> ระบบแชร์ (Cloud)</button>
       </div>
 
@@ -634,6 +998,10 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
           </div>
         )}
         
+        {activeTab === 'layouts' && (
+          <LayoutEditorTab customLayouts={customLayouts} setCustomLayouts={setCustomLayouts} />
+        )}
+
         {activeTab === 'cloud' && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-8">
              <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Settings className="w-5 h-5 text-amber-500" /> Cloudinary Settings (สำหรับ iPad / QR Code)</h3>
@@ -655,7 +1023,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
   );
 }
 
-function SetupView({ config, setConfig, onNext, onBack }) {
+function SetupView({ config, setConfig, customLayouts, onNext, onBack }) {
   return (
     <div className="flex-1 flex flex-col p-6 max-w-4xl mx-auto w-full">
       <header className="flex items-center justify-between py-4 mb-8 border-b border-zinc-800">
