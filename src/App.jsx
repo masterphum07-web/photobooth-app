@@ -1074,7 +1074,7 @@ function DraggableSticker({ sticker, containerRef, onUpdate, onDelete, isSelecte
   );
 }
 
-function EditorView({ config, photos, availableFrames, availableStickers, brandText, fontFamily, finalVideo, onExport, onRetake }) {
+function EditorView({ config, photos, availableFrames, availableStickers, brandText, fontFamily, finalVideo, photoConfig, onExport, onRetake }) {
   const [stickers, setStickers] = useState([]);
   const [selectedStickerId, setSelectedStickerId] = useState(null);
   const [activeTab, setActiveTab] = useState('stickers'); 
