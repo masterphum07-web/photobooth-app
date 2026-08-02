@@ -35,10 +35,28 @@ const DEFAULT_STICKERS = ['👑', '✨', '💖', '🎉', '🌸', '😎', '🐱',
 
 // --- CUSTOM HOOK FOR LOCAL STORAGE ---
 function useLocalStorage(key, initialValue) {
+  const getMergedValue = (value) => {
+    if (Array.isArray(initialValue)) {
+      return Array.isArray(value) ? value : initialValue;
+    }
+
+    if (
+      initialValue &&
+      !Array.isArray(initialValue) &&
+      typeof initialValue === 'object' &&
+      value &&
+      !Array.isArray(value) &&
+      typeof value === 'object'
+    ) {
+      return { ...initialValue, ...value };
+    }
+    return value;
+  };
+
   const [storedValue, setStoredValue] = useState(() => {
     try {
       const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
+      return item ? getMergedValue(JSON.parse(item)) : initialValue;
     } catch (error) {
       return initialValue;
     }
@@ -46,7 +64,7 @@ function useLocalStorage(key, initialValue) {
   const setValue = value => {
     try {
       const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
+      setStoredValue(getMergedValue(valueToStore));
       window.localStorage.setItem(key, JSON.stringify(valueToStore));
     } catch (error) {}
   };
@@ -55,6 +73,43 @@ function useLocalStorage(key, initialValue) {
 
 // --- UTILS ---
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const isCustomLayout = (layout) => Array.isArray(layout?.slots) && layout.slots.length > 0;
+const getLayoutShotCount = (layout) => isCustomLayout(layout) ? layout.slots.length : (layout?.shots || 1);
+const getLayoutAspectStyle = (layout) => ({ aspectRatio: `${layout?.vW || 1200} / ${layout?.vH || 1600}` });
+const getSafeCustomLayouts = (layouts) => (
+  Array.isArray(layouts)
+    ? layouts.filter(layout => (
+        layout &&
+        typeof layout === 'object' &&
+        Array.isArray(layout.slots) &&
+        layout.slots.length > 0
+      ))
+    : []
+);
+
+const drawImageCover = (ctx, img, x, y, width, height) => {
+  const imageAspect = img.width / img.height;
+  const slotAspect = width / height;
+  let sourceWidth;
+  let sourceHeight;
+  let sourceX;
+  let sourceY;
+
+  if (imageAspect > slotAspect) {
+    sourceHeight = img.height;
+    sourceWidth = img.height * slotAspect;
+    sourceX = (img.width - sourceWidth) / 2;
+    sourceY = 0;
+  } else {
+    sourceWidth = img.width;
+    sourceHeight = img.width / slotAspect;
+    sourceX = 0;
+    sourceY = (img.height - sourceHeight) / 2;
+  }
+
+  ctx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+};
 
 // --- MAIN APP COMPONENT ---
 export default function App() {
@@ -128,6 +183,7 @@ export default function App() {
           landingConfig={landingConfig} setLandingConfig={setLandingConfig}
           cloudConfig={cloudConfig} setCloudConfig={setCloudConfig}
           photoConfig={photoConfig} setPhotoConfig={setPhotoConfig}
+          customLayouts={customLayouts} setCustomLayouts={setCustomLayouts}
           onBack={() => setView('landing')} 
         />
       )}
@@ -135,6 +191,7 @@ export default function App() {
       {view === 'setup' && (
         <SetupView 
           config={config} setConfig={setConfig} 
+          customLayouts={customLayouts}
           onNext={() => setView('booth')} 
           onBack={() => setView('landing')} 
         />
@@ -171,26 +228,33 @@ export default function App() {
 // --- VIEWS ---
 
 function LandingView({ onStart, onAdmin, config }) {
+  const bgColor1 = config?.bgColor1 || '#1a0e04';
+  const bgColor2 = config?.bgColor2 || '#3d1f00';
+  const accentColor = config?.accentColor || '#d4a055';
+  const title = config?.title?.trim() || 'Yeehaw Photo Booth';
+  const subtitle = config?.subtitle?.trim() || 'ถ่ายรูปสไตล์คาวบอย กรอบสวย สติกเกอร์เพียบ!';
+  const buttonText = config?.buttonText?.trim() || '🤠 แตะเพื่อเริ่มถ่ายรูป';
+
   return (
     <div 
-      className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden"
+      className="flex-1 min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden"
       style={{
-        background: config.bgImage 
+        background: config?.bgImage 
           ? `url(${config.bgImage}) center/cover no-repeat` 
-          : `linear-gradient(to bottom, ${config.bgColor1}, ${config.bgColor2})`
+          : `linear-gradient(to bottom, ${bgColor1}, ${bgColor2})`
       }}
     >
       <div 
         className="absolute inset-0 pointer-events-none" 
         style={{
-          backgroundColor: config.bgImage ? 'rgba(26, 14, 4, 0.6)' : 'transparent',
-          backgroundImage: config.bgImage ? 'none' : `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E")`
+          backgroundColor: config?.bgImage ? 'rgba(26, 14, 4, 0.6)' : 'transparent',
+          backgroundImage: config?.bgImage ? 'none' : `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E")`
         }} 
       />
 
-      <div className="absolute inset-4 sm:inset-8 border-4 border-dashed rounded-3xl pointer-events-none opacity-40 z-0" style={{ borderColor: config.accentColor }} />
+      <div className="absolute inset-4 sm:inset-8 border-4 border-dashed rounded-3xl pointer-events-none opacity-40 z-0" style={{ borderColor: accentColor }} />
 
-      {config.showStars && (
+      {config?.showStars !== false && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           {Array.from({ length: 25 }).map((_, i) => (
             <div 
@@ -221,15 +285,15 @@ function LandingView({ onStart, onAdmin, config }) {
         <h1 
           className="text-5xl md:text-7xl font-extrabold tracking-wider mb-6 font-serif"
           style={{ 
-            color: config.accentColor,
+            color: accentColor,
             textShadow: '2px 2px 0px #3d1f00, 4px 4px 0px rgba(0,0,0,0.5), 0 0 20px rgba(212,160,85,0.4)'
           }}
         >
-          {config.title}
+          {title}
         </h1>
         
         <p className="text-xl md:text-2xl mb-12 max-w-lg leading-relaxed font-medium" style={{ color: '#FFF8DC', textShadow: '1px 1px 4px rgba(0,0,0,0.8)' }}>
-          {config.subtitle}
+          {subtitle}
         </p>
         
         <button 
@@ -237,12 +301,12 @@ function LandingView({ onStart, onAdmin, config }) {
           className="group relative inline-flex items-center justify-center gap-3 px-10 py-5 rounded-full text-xl font-bold transition-all hover:scale-105 active:scale-95 animate-glow-pulse border-2 overflow-hidden"
           style={{ 
             backgroundColor: '#3d1f00',
-            color: config.accentColor,
-            borderColor: config.accentColor
+            color: accentColor,
+            borderColor: accentColor
           }}
         >
           <div className="absolute inset-0 opacity-20" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E")` }} />
-          <span className="relative z-10 drop-shadow-md">{config.buttonText}</span>
+          <span className="relative z-10 drop-shadow-md">{buttonText}</span>
           <ChevronRight className="w-6 h-6 relative z-10 transition-transform group-hover:translate-x-1" />
         </button>
       </div>
@@ -289,7 +353,8 @@ const LAYOUT_TEMPLATES = [
   ]},
 ];
 
-function LayoutEditorTab({ customLayouts, setCustomLayouts }) {
+function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
+  const safeCustomLayouts = getSafeCustomLayouts(customLayouts);
   const [editingLayout, setEditingLayout] = useState(null); // null = list mode, object = editing
   const [layoutName, setLayoutName] = useState('');
   const [canvasSize, setCanvasSize] = useState({ vW: 1200, vH: 1800 });
@@ -348,15 +413,15 @@ function LayoutEditorTab({ customLayouts, setCustomLayouts }) {
     };
     
     if (editingLayout === 'new') {
-      setCustomLayouts([...customLayouts, layoutData]);
+      setCustomLayouts([...safeCustomLayouts, layoutData]);
     } else {
-      setCustomLayouts(customLayouts.map(l => l.id === editingLayout ? layoutData : l));
+      setCustomLayouts(safeCustomLayouts.map(l => l.id === editingLayout ? layoutData : l));
     }
     setEditingLayout(null);
   };
 
   const deleteLayout = (id) => {
-    setCustomLayouts(customLayouts.filter(l => l.id !== id));
+    setCustomLayouts(safeCustomLayouts.filter(l => l.id !== id));
   };
 
   // --- Pointer handlers for drag/resize ---
@@ -449,11 +514,11 @@ function LayoutEditorTab({ customLayouts, setCustomLayouts }) {
         </div>
 
         {/* Saved Layouts */}
-        {customLayouts.length > 0 && (
+        {safeCustomLayouts.length > 0 && (
           <div>
             <h4 className="text-sm font-bold text-zinc-400 mb-3 uppercase tracking-wider">เลย์เอาต์ที่บันทึกไว้</h4>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {customLayouts.map(l => (
+              {safeCustomLayouts.map(l => (
                 <div key={l.id} className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 relative group">
                   <div className="w-full aspect-[3/4] bg-zinc-900 rounded-lg relative mb-2 overflow-hidden cursor-pointer" onClick={() => editLayout(l)}>
                     {l.slots.map((s, j) => (
@@ -620,6 +685,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
   const [newFrameName, setNewFrameName] = useState('');
   const [newFrameColor, setNewFrameColor] = useState('#ff0000');
   const [newFrameTextColor, setNewFrameTextColor] = useState('#ffffff');
+  const safeCustomLayouts = getSafeCustomLayouts(customLayouts);
 
   const addSticker = () => {
     if(newSticker.trim()) {
@@ -668,7 +734,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
   };
 
   const exportSettings = () => {
-    const data = JSON.stringify({ frames, stickers, landingConfig, photoConfig });
+    const data = JSON.stringify({ frames, stickers, landingConfig, photoConfig, customLayouts: safeCustomLayouts });
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -689,6 +755,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
         if (data.stickers) setStickers(data.stickers);
         if (data.landingConfig) setLandingConfig(data.landingConfig);
         if (data.photoConfig) setPhotoConfig(data.photoConfig);
+        if (data.customLayouts) setCustomLayouts(getSafeCustomLayouts(data.customLayouts));
         alert("โหลดการตั้งค่าสำเร็จ!");
       } catch (err) {
         alert("ไฟล์ไม่ถูกต้อง");
@@ -999,7 +1066,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
         )}
         
         {activeTab === 'layouts' && (
-          <LayoutEditorTab customLayouts={customLayouts} setCustomLayouts={setCustomLayouts} />
+          <LayoutEditorTab customLayouts={safeCustomLayouts} setCustomLayouts={setCustomLayouts} />
         )}
 
         {activeTab === 'cloud' && (
@@ -1024,6 +1091,8 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
 }
 
 function SetupView({ config, setConfig, customLayouts, onNext, onBack }) {
+  const layouts = [...Object.values(LAYOUTS), ...getSafeCustomLayouts(customLayouts)];
+
   return (
     <div className="flex-1 flex flex-col p-6 max-w-4xl mx-auto w-full">
       <header className="flex items-center justify-between py-4 mb-8 border-b border-zinc-800">
@@ -1041,7 +1110,7 @@ function SetupView({ config, setConfig, customLayouts, onNext, onBack }) {
             <h3 className="text-zinc-50">เลือกรูปแบบกรอบ (Layout)</h3>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            {Object.values(LAYOUTS).map(layout => (
+            {layouts.map(layout => (
               <button
                 key={layout.id}
                 onClick={() => setConfig({ ...config, layout })}
@@ -1051,15 +1120,33 @@ function SetupView({ config, setConfig, customLayouts, onNext, onBack }) {
                     : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
                 }`}
               >
-                <div className={`w-12 h-16 bg-zinc-800 rounded-sm mb-4 border border-zinc-700 p-1 flex flex-col gap-1 ${
-                  layout.id === 'grid' ? 'grid grid-cols-2 flex-row' : ''
-                }`}>
-                  {Array.from({ length: layout.shots }).map((_, i) => (
-                    <div key={i} className="flex-1 bg-zinc-600 rounded-sm w-full h-full" />
-                  ))}
+                <div
+                  className="w-12 bg-zinc-800 rounded-sm mb-4 border border-zinc-700 p-1 relative overflow-hidden"
+                  style={getLayoutAspectStyle(layout)}
+                >
+                  {isCustomLayout(layout) ? (
+                    layout.slots.map((slot, index) => (
+                      <div
+                        key={slot.id ?? index}
+                        className="absolute bg-zinc-600 rounded-sm"
+                        style={{
+                          left: `${slot.x}%`,
+                          top: `${slot.y}%`,
+                          width: `${slot.w}%`,
+                          height: `${slot.h}%`,
+                        }}
+                      />
+                    ))
+                  ) : (
+                    <div className={`w-full h-full flex flex-col gap-1 ${layout.cols === 2 ? 'grid grid-cols-2' : ''}`}>
+                      {Array.from({ length: getLayoutShotCount(layout) }).map((_, index) => (
+                        <div key={index} className="flex-1 bg-zinc-600 rounded-sm w-full h-full" />
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <span className="font-medium">{layout.name}</span>
-                <span className="text-xs text-zinc-500 mt-1">ถ่าย {layout.shots} ช็อต</span>
+                <span className="text-xs text-zinc-500 mt-1">ถ่าย {getLayoutShotCount(layout)} ช็อต</span>
               </button>
             ))}
           </div>
@@ -1139,6 +1226,7 @@ function BoothView({ config, onComplete, onCancel }) {
   const [count, setCount] = useState(3);
   const [shotIndex, setShotIndex] = useState(0);
   const [captured, setCaptured] = useState([]);
+  const shotCount = getLayoutShotCount(config.layout);
 
   useEffect(() => {
     async function startCamera() {
@@ -1221,7 +1309,7 @@ function BoothView({ config, onComplete, onCancel }) {
     startRecording();
     let currentCaptured = [];
     
-    for (let currentShot = 0; currentShot < config.layout.shots; currentShot++) {
+    for (let currentShot = 0; currentShot < shotCount; currentShot++) {
       setShotIndex(currentShot);
       setStatus('countdown');
       for (let i = config.timer; i > 0; i--) {
@@ -1246,7 +1334,7 @@ function BoothView({ config, onComplete, onCancel }) {
       currentCaptured.push(imgData);
       setCaptured([...currentCaptured]);
       
-      if (currentShot < config.layout.shots - 1) {
+      if (currentShot < shotCount - 1) {
          setStatus('idle'); // Just to show idle UI briefly
          await wait(1000); // 1 second break between shots
       }
@@ -1275,7 +1363,7 @@ function BoothView({ config, onComplete, onCancel }) {
             <X className="w-5 h-5" />
           </button>
           <div className="bg-black/60 backdrop-blur-md px-6 py-2 rounded-full text-sm font-bold border border-white/10 shadow-xl text-white">
-            ช็อตที่ {shotIndex + 1} / {config.layout.shots}
+            ช็อตที่ {shotIndex + 1} / {shotCount}
           </div>
         </header>
 
@@ -1295,20 +1383,6 @@ function BoothView({ config, onComplete, onCancel }) {
           <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white/60 rounded-bl-xl" />
           <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white/60 rounded-br-xl" />
         </div>
-
-        {status === 'review' && (
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-50">
-            <button 
-              onClick={handleFinish}
-              className="px-10 py-4 rounded-full bg-blue-600 text-white font-bold text-xl hover:bg-blue-500 hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(59,130,246,0.6)] border border-blue-400/50"
-            >
-              ✅ ไปตกแต่งรูป (Continue)
-            </button>
-            <span className="text-white text-sm font-bold tracking-wider drop-shadow-md bg-black/60 px-5 py-2 rounded-full backdrop-blur-md">
-              💡 แตะที่รูปด้านล่างเพื่อถ่ายใหม่ (Retake)
-            </span>
-          </div>
-        )}
 
         {status === 'idle' && (
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-50">
@@ -1341,7 +1415,7 @@ function BoothView({ config, onComplete, onCancel }) {
 
       {/* Captured Preview Strip at Bottom */}
       <div className="h-32 mt-4 bg-zinc-950 border border-zinc-800 rounded-xl p-3 flex gap-3 overflow-x-auto items-center justify-center">
-        {Array.from({ length: config.layout.shots }).map((_, i) => (
+        {Array.from({ length: shotCount }).map((_, i) => (
           <div 
             key={i} 
             className={`h-full aspect-[3/4] rounded-lg border-2 overflow-hidden bg-zinc-900 transition-all duration-300 ${
@@ -1462,6 +1536,7 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
   const [activeTab, setActiveTab] = useState('stickers'); 
   const [selectedFrame, setSelectedFrame] = useState(availableFrames[0] || DEFAULT_FRAMES[0]);
   const [isExporting, setIsExporting] = useState(false);
+  const customLayout = isCustomLayout(config.layout);
   
   const layoutRef = useRef(null); // The actual frame container
 
@@ -1531,8 +1606,8 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
       const contentW = vW - (padding * 2);
       const contentH = vH - padding - bottomArea;
       
-      const cols = config.layout.cols;
-      const rows = Math.ceil(config.layout.shots / cols);
+      const cols = config.layout.cols || 1;
+      const rows = Math.ceil(getLayoutShotCount(config.layout) / cols);
       const spacing = vW * ((photoConfig?.spacing ?? 5) / 100);
 
       const slotW = (contentW - (spacing * (cols - 1))) / cols;
@@ -1543,44 +1618,45 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
         return new Promise((resolve) => {
           const img = new Image();
           img.onload = () => {
-            const row = Math.floor(i / cols);
-            const col = i % cols;
-            
-            const x = padding + (col * (slotW + spacing));
-            const y = padding + (row * (slotH + spacing));
-            
-            // Object-fit: cover simulation
-            const imgAspect = img.width / img.height;
-            const slotAspect = slotW / slotH;
-            let drawW, drawH, drawX, drawY;
-            
-            if (imgAspect > slotAspect) {
-              drawH = img.height;
-              drawW = img.height * slotAspect;
-              drawX = (img.width - drawW) / 2;
-              drawY = 0;
+            let x;
+            let y;
+            let width;
+            let height;
+
+            if (customLayout) {
+              const slot = config.layout.slots[i];
+              x = (slot.x / 100) * vW;
+              y = (slot.y / 100) * vH;
+              width = (slot.w / 100) * vW;
+              height = (slot.h / 100) * vH;
             } else {
-              drawW = img.width;
-              drawH = img.width / slotAspect;
-              drawX = 0;
-              drawY = (img.height - drawH) / 2;
+              const row = Math.floor(i / cols);
+              const col = i % cols;
+              x = padding + (col * (slotW + spacing));
+              y = padding + (row * (slotH + spacing));
+              width = slotW;
+              height = slotH;
             }
-            
-            const radius = slotW * ((photoConfig?.borderRadius ?? 0) / 100);
-            
+
+            const radius = Math.min(width, height) * ((photoConfig?.borderRadius ?? 0) / 100);
+
             ctx.save();
             ctx.beginPath();
-            ctx.roundRect(x, y, slotW, slotH, radius);
+            ctx.roundRect(x, y, width, height, radius);
             ctx.clip();
-            
+
             // Draw photo background (gray)
             ctx.fillStyle = '#e4e4e7';
-            ctx.fillRect(x, y, slotW, slotH);
-            
+            ctx.fillRect(x, y, width, height);
+
             // Draw Image
-            ctx.drawImage(img, drawX, drawY, drawW, drawH, x, y, slotW, slotH);
-            
+            drawImageCover(ctx, img, x, y, width, height);
+
             ctx.restore();
+            resolve();
+          };
+          img.onerror = () => {
+            console.warn(`Photo ${i} failed to load, skipping`);
             resolve();
           };
           img.src = photoSrc;
@@ -1597,12 +1673,16 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
             ctx.drawImage(img, 0, 0, vW, vH);
             resolve();
           };
+          img.onerror = () => {
+            console.warn('Frame overlay image failed to load, skipping');
+            resolve();
+          };
           img.src = selectedFrame.src;
         });
       }
 
-      // 4. Draw Branding and Date (Hide if using custom image frame)
-      if (selectedFrame.type !== 'image') {
+      // 4. Draw Branding and Date (Hide if using custom image frame or fully custom layout)
+      if (selectedFrame.type !== 'image' && !customLayout) {
         ctx.fillStyle = selectedFrame.text;
         
         // Brand Text
@@ -1636,6 +1716,10 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
             const img = new Image();
             img.onload = () => {
               ctx.drawImage(img, -size/2, -size/2, size, size);
+              resolve();
+            };
+            img.onerror = () => {
+              console.warn(`Sticker image failed to load: ${s.content.substring(0, 30)}...`);
               resolve();
             };
             img.src = s.content;
@@ -1705,13 +1789,11 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
           */}
           <div 
             ref={layoutRef}
-            className={`relative overflow-hidden ${config.layout.aspect} flex flex-col transition-colors duration-300 ring-1 ring-white/10`}
+            className={`relative overflow-hidden ${customLayout ? '' : config.layout.aspect} flex flex-col transition-colors duration-300 ring-1 ring-white/10 max-h-[calc(100vh-120px)] max-w-full w-auto`}
               style={{ 
                 background: selectedFrame.type === 'image' ? '#ffffff' : selectedFrame.bg,
-                height: 'calc(100vh - 220px)',
-                maxHeight: '850px',
-                minHeight: '400px',
-                padding: `${photoConfig?.padding ?? 5}%`
+                padding: customLayout ? 0 : `${photoConfig?.padding ?? 5}%`,
+                ...(customLayout ? getLayoutAspectStyle(config.layout) : {})
               }}
           >
             {/* Top-left date */}
@@ -1725,20 +1807,40 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
             )}
 
             {/* Photos Grid */}
-            <div 
-              className={`flex-1 grid relative z-10 ${config.layout.cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
-              style={{ gap: `${photoConfig?.spacing ?? 5}%` }}
-            >
-              {photos.map((photo, i) => (
-                <div 
-                  key={i} 
-                  className="bg-zinc-200 overflow-hidden relative shadow-inner w-full h-full"
-                  style={{ borderRadius: `${photoConfig?.borderRadius || 0}%` }}
-                >
-                  <img src={photo} alt="" className="w-full h-full object-cover absolute inset-0" />
-                </div>
-              ))}
-            </div>
+            {customLayout ? (
+              <div className="absolute inset-0 z-10">
+                {config.layout.slots.map((slot, index) => (
+                  <div
+                    key={slot.id ?? index}
+                    className="absolute bg-zinc-200 overflow-hidden shadow-inner"
+                    style={{
+                      left: `${slot.x}%`,
+                      top: `${slot.y}%`,
+                      width: `${slot.w}%`,
+                      height: `${slot.h}%`,
+                      borderRadius: `${photoConfig?.borderRadius || 0}%`,
+                    }}
+                  >
+                    {photos[index] && <img src={photos[index]} alt="" className="w-full h-full object-cover absolute inset-0" />}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div 
+                className={`flex-1 grid relative z-10 ${config.layout.cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
+                style={{ gap: `${photoConfig?.spacing ?? 5}%` }}
+              >
+                {photos.map((photo, index) => (
+                  <div 
+                    key={index} 
+                    className="bg-zinc-200 overflow-hidden relative shadow-inner w-full h-full"
+                    style={{ borderRadius: `${photoConfig?.borderRadius || 0}%` }}
+                  >
+                    <img src={photo} alt="" className="w-full h-full object-cover absolute inset-0" />
+                  </div>
+                ))}
+              </div>
+            )}
             
             {/* Frame Overlay Image */}
             {selectedFrame.type === 'image' && (
@@ -1746,7 +1848,7 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
             )}
 
             {/* Branding */}
-            {selectedFrame.type !== 'image' && (
+            {selectedFrame.type !== 'image' && !customLayout && (
               <div className="h-[10%] min-h-[40px] flex items-center justify-center shrink-0 z-0">
                 <span className="font-bold text-[clamp(12px,2vh,24px)] tracking-widest opacity-90" style={{ color: selectedFrame.text, fontFamily: `'${fontFamily}', sans-serif` }}>
                   {brandText}
