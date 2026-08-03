@@ -1091,7 +1091,8 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
 }
 
 function SetupView({ config, setConfig, customLayouts, onNext, onBack }) {
-  const layouts = [...Object.values(LAYOUTS), ...getSafeCustomLayouts(customLayouts)];
+  const safeCustom = getSafeCustomLayouts(customLayouts);
+  const layouts = safeCustom.length > 0 ? safeCustom : Object.values(LAYOUTS);
 
   return (
     <div className="flex-1 flex flex-col p-6 max-w-4xl mx-auto w-full">
