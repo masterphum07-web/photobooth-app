@@ -686,6 +686,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
   const [newFrameColor, setNewFrameColor] = useState('#ff0000');
   const [newFrameTextColor, setNewFrameTextColor] = useState('#ffffff');
   const safeCustomLayouts = getSafeCustomLayouts(customLayouts);
+  const availableLayouts = [...Object.values(LAYOUTS), ...safeCustomLayouts];
 
   const addSticker = () => {
     if(newSticker.trim()) {
@@ -935,7 +936,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
               <div className="flex justify-between w-full mb-3 items-center">
                 <span className="text-xs text-zinc-400">Live Preview</span>
                 <div className="flex gap-1 flex-wrap justify-end">
-                  {Object.values(LAYOUTS).map(l => (
+                  {availableLayouts.map(l => (
                     <button 
                       key={l.id} 
                       onClick={() => setPreviewLayout(l)}
@@ -947,20 +948,27 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
                 </div>
               </div>
               <div className="flex-1 flex items-center justify-center overflow-hidden min-h-[400px]">
-                <div 
-                  className={`w-[120px] bg-white relative flex flex-col scale-[0.9] origin-center shadow-xl ${previewLayout.aspect}`} 
-                  style={{ padding: `${photoConfig?.padding ?? 5}%` }}
+                <div
+                  className="w-[120px] bg-white relative flex flex-col scale-[0.9] origin-center shadow-xl"
+                  style={{ ...getLayoutAspectStyle(previewLayout), padding: isCustomLayout(previewLayout) ? 0 : `${photoConfig?.padding ?? 5}%` }}
                 >
-                  <div 
-                    className={`flex-1 grid ${previewLayout.cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
-                    style={{ gap: `${photoConfig?.spacing ?? 5}%` }}
-                  >
-                    {Array.from({ length: previewLayout.shots }).map((_, i) => (
-                      <div key={i} className="bg-zinc-300 overflow-hidden relative shadow-inner w-full h-full" style={{ borderRadius: `${photoConfig?.borderRadius || 0}%` }}>
-                        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" className="w-full h-full object-cover absolute inset-0" />
-                      </div>
-                    ))}
-                  </div>
+                  {isCustomLayout(previewLayout) ? (
+                    <div className="absolute inset-0">
+                      {previewLayout.slots.map((slot, i) => (
+                        <div key={i} className="absolute bg-zinc-300 overflow-hidden shadow-inner" style={{ left: `${slot.x}%`, top: `${slot.y}%`, width: `${slot.w}%`, height: `${slot.h}%`, borderRadius: `${photoConfig?.borderRadius || 0}%` }}>
+                          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className={`flex-1 grid ${previewLayout.cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`} style={{ gap: `${photoConfig?.spacing ?? 5}%` }}>
+                      {Array.from({ length: getLayoutShotCount(previewLayout) }).map((_, i) => (
+                        <div key={i} className="bg-zinc-300 overflow-hidden relative shadow-inner w-full h-full" style={{ borderRadius: `${photoConfig?.borderRadius || 0}%` }}>
+                          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" className="w-full h-full object-cover absolute inset-0" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   
                   <div className="h-[12%] min-h-[20px] w-full flex items-center justify-center shrink-0">
                     <span className="text-black font-bold text-[8px] tracking-wider" style={{ fontFamily: `'${landingConfig?.fontFamily || 'Kanit'}', sans-serif` }}>
@@ -1092,7 +1100,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
 
 function SetupView({ config, setConfig, customLayouts, onNext, onBack }) {
   const safeCustom = getSafeCustomLayouts(customLayouts);
-  const layouts = safeCustom.length > 0 ? safeCustom : Object.values(LAYOUTS);
+  const layouts = [...Object.values(LAYOUTS), ...safeCustom];
 
   return (
     <div className="flex-1 flex flex-col p-6 max-w-4xl mx-auto w-full">
