@@ -561,6 +561,7 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
                         {j + 1}
                       </div>
                     ))}
+                    {(l.texts || []).map(t => <span key={t.id} className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-bold text-[7px]" style={{ left: `${t.x}%`, top: `${t.y}%`, color: t.color }}>{t.text}</span>)}
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-zinc-300 font-medium truncate">{l.name}</span>
