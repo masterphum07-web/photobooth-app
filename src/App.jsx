@@ -356,7 +356,7 @@ const LAYOUT_TEMPLATES = [
 const getAvailableLayouts = (customLayouts = []) => [
   LAYOUTS.single,
   LAYOUTS.strip,
-  LAYOUTS.strip4,
+  LAYOUTS.strip_4,
   ...getSafeCustomLayouts(customLayouts),
 ];
 
@@ -500,7 +500,7 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
         <div>
           <h4 className="text-sm font-bold text-zinc-400 mb-3 uppercase tracking-wider">เลย์เอาต์เดียวกับหน้า Preview</h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[LAYOUTS.single, LAYOUTS.strip, LAYOUTS.strip4].map(layout => (
+            {[LAYOUTS.single, LAYOUTS.strip, LAYOUTS.strip_4].filter(Boolean).map(layout => (
               <div key={layout.id} className="bg-zinc-800 border border-blue-500/40 rounded-xl p-3">
                 <div className="w-full aspect-[3/4] bg-zinc-900 rounded-lg relative mb-2 overflow-hidden p-2">
                   <div className={`w-full h-full flex flex-col gap-1 ${layout.cols === 2 ? 'grid grid-cols-2' : ''}`}>
