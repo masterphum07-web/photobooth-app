@@ -671,7 +671,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
   const [newFrameColor, setNewFrameColor] = useState('#ff0000');
   const [newFrameTextColor, setNewFrameTextColor] = useState('#ffffff');
   const safeCustomLayouts = getSafeCustomLayouts(customLayouts);
-  const availableLayouts = [...Object.values(LAYOUTS), ...safeCustomLayouts];
+  const availableLayouts = Object.values(LAYOUTS);
 
   const addSticker = () => {
     if(newSticker.trim()) {
@@ -779,7 +779,6 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
         <button onClick={() => setActiveTab('photo')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'photo' ? 'bg-zinc-800 text-blue-400 border-b-2 border-blue-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><LayoutTemplate className="w-4 h-4"/> ตกแต่งรูปภาพ</button>
         <button onClick={() => setActiveTab('frames')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'frames' ? 'bg-zinc-800 text-fuchsia-400 border-b-2 border-fuchsia-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><Square className="w-4 h-4"/> กรอบรูป</button>
         <button onClick={() => setActiveTab('stickers')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'stickers' ? 'bg-zinc-800 text-indigo-400 border-b-2 border-indigo-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><Smile className="w-4 h-4"/> สติกเกอร์</button>
-        <button onClick={() => setActiveTab('layouts')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'layouts' ? 'bg-zinc-800 text-green-400 border-b-2 border-green-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><Grid3X3 className="w-4 h-4"/> จัดเลย์เอาต์</button>
         <button onClick={() => setActiveTab('cloud')} className={`flex items-center gap-2 px-4 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap ${activeTab === 'cloud' ? 'bg-zinc-800 text-zinc-100 border-b-2 border-zinc-100' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'}`}><MonitorSmartphone className="w-4 h-4"/> ระบบแชร์ (Cloud)</button>
       </div>
 
@@ -1061,10 +1060,6 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
           </div>
         )}
         
-        {activeTab === 'layouts' && (
-          <LayoutEditorTab customLayouts={safeCustomLayouts} setCustomLayouts={setCustomLayouts} />
-        )}
-
         {activeTab === 'cloud' && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-8">
              <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Settings className="w-5 h-5 text-amber-500" /> Cloudinary Settings (สำหรับ iPad / QR Code)</h3>
@@ -1087,8 +1082,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
 }
 
 function SetupView({ config, setConfig, customLayouts, onNext, onBack }) {
-  const safeCustom = getSafeCustomLayouts(customLayouts);
-  const layouts = [...Object.values(LAYOUTS), ...safeCustom];
+  const layouts = Object.values(LAYOUTS);
 
   return (
     <div className="flex-1 flex flex-col p-6 max-w-4xl mx-auto w-full">
