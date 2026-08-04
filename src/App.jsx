@@ -940,9 +940,10 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
                     <button 
                       key={l.id} 
                       onClick={() => setPreviewLayout(l)}
+                      title={l.name}
                       className={`text-[10px] px-2 py-1 rounded transition-colors ${previewLayout.id === l.id ? 'bg-blue-500 text-white' : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'}`}
                     >
-                      {l.id}
+                      {l.name || l.id}
                     </button>
                   ))}
                 </div>
@@ -970,11 +971,13 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
                     </div>
                   )}
                   
-                  <div className="h-[12%] min-h-[20px] w-full flex items-center justify-center shrink-0">
-                    <span className="text-black font-bold text-[8px] tracking-wider" style={{ fontFamily: `'${landingConfig?.fontFamily || 'Kanit'}', sans-serif` }}>
-                      {landingConfig?.brandText || 'STUDIO BOOTH'}
-                    </span>
-                  </div>
+                  {!isCustomLayout(previewLayout) && (
+                    <div className="h-[12%] min-h-[20px] w-full flex items-center justify-center shrink-0">
+                      <span className="text-black font-bold text-[8px] tracking-wider" style={{ fontFamily: `'${landingConfig?.fontFamily || 'Kanit'}', sans-serif` }}>
+                        {landingConfig?.brandText || 'STUDIO BOOTH'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
