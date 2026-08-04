@@ -3,7 +3,7 @@ import {
   Camera, Image as ImageIcon, Wand2, Download, QrCode, 
   Settings, Smile, ChevronRight, Sparkles, RefreshCcw, 
   X, Layers, Share2, Loader2, AlertCircle, ShieldAlert,
-  Plus, Trash2, ImagePlus, Paintbrush, MonitorSmartphone, LayoutTemplate, Square, Move, Maximize2, Copy, Grid3X3
+  Plus, Trash2, ImagePlus, Paintbrush, MonitorSmartphone, LayoutTemplate, Square, Move, Maximize2, Copy, Grid3X3, Type
 } from 'lucide-react';
 import QRCode from 'qrcode';
 
@@ -490,27 +490,12 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
       <div className="space-y-6 bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
         <h3 className="text-xl font-semibold flex items-center gap-2"><Grid3X3 className="text-green-400"/> จัดเลย์เอาต์ (Custom Layout Editor)</h3>
         
-        {/* Templates */}
         <div>
-          <h4 className="text-sm font-bold text-zinc-400 mb-3 uppercase tracking-wider">เริ่มจากเทมเพลต</h4>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {LAYOUT_TEMPLATES.map((t, i) => (
-              <button key={i} onClick={() => startNewLayout(t)} className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-green-500 rounded-xl p-3 transition-all group">
-                <div className="w-full aspect-[3/4] bg-zinc-900 rounded-lg relative mb-2 overflow-hidden">
-                  {t.slots.map((s, j) => (
-                    <div key={j} className="absolute bg-green-500/30 border border-green-500/60 rounded-sm flex items-center justify-center text-green-300 text-xs font-bold group-hover:bg-green-500/50 transition-colors" style={{ left: s.x + '%', top: s.y + '%', width: s.w + '%', height: s.h + '%' }}>
-                      {j + 1}
-                    </div>
-                  ))}
-                </div>
-                <span className="text-xs text-zinc-300 font-medium">{t.name}</span>
-              </button>
-            ))}
-            <button onClick={() => startNewLayout(null)} className="bg-zinc-800 hover:bg-zinc-700 border-2 border-dashed border-zinc-600 hover:border-green-500 rounded-xl p-3 transition-all flex flex-col items-center justify-center gap-2 min-h-[140px]">
-              <Plus className="w-8 h-8 text-zinc-500" />
-              <span className="text-xs text-zinc-400">สร้างเอง</span>
-            </button>
-          </div>
+          <h4 className="text-sm font-bold text-zinc-400 mb-3 uppercase tracking-wider">เลย์เอาต์ที่ใช้ในพรีวิวและหน้าถ่ายรูป</h4>
+          <button onClick={() => startNewLayout(null)} className="bg-zinc-800 hover:bg-zinc-700 border-2 border-dashed border-zinc-600 hover:border-green-500 rounded-xl p-4 transition-all flex items-center justify-center gap-2 min-h-[90px] w-full sm:w-64">
+            <Plus className="w-6 h-6 text-zinc-500" />
+            <span className="text-sm text-zinc-400">สร้าง Custom Layout</span>
+          </button>
         </div>
 
         {/* Saved Layouts */}
@@ -1452,6 +1437,7 @@ function BoothView({ config, onComplete, onCancel }) {
 // Changed to use percentage (x,y) so it perfectly scales between UI and Virtual Canvas
 function DraggableSticker({ sticker, containerRef, onUpdate, onDelete, isSelected, onSelect }) {
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [startPos, setStartPos] = useState({ mouseX: 0, mouseY: 0, stickerX: 0, stickerY: 0 });
 
   const handlePointerDown = (e) => {
@@ -1471,12 +1457,18 @@ function DraggableSticker({ sticker, containerRef, onUpdate, onDelete, isSelecte
   };
 
   const handlePointerMove = useCallback((e) => {
-    if (!isDragging || !containerRef.current) return;
+    if ((!isDragging && !isResizing) || !containerRef.current) return;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     
     const deltaX = clientX - startPos.mouseX;
     const deltaY = clientY - startPos.mouseY;
+
+    if (isResizing) {
+      const delta = deltaX / containerRef.current.getBoundingClientRect().width;
+      onUpdate(sticker.id, { scale: Math.max(0.35, Math.min(4, startPos.scale + delta * 2)) });
+      return;
+    }
 
     // Convert pixel delta to percentage based on container size
     const rect = containerRef.current.getBoundingClientRect();
@@ -1487,9 +1479,9 @@ function DraggableSticker({ sticker, containerRef, onUpdate, onDelete, isSelecte
       x: startPos.stickerX + deltaPercentX,
       y: startPos.stickerY + deltaPercentY
     });
-  }, [isDragging, startPos, onUpdate, sticker.id, containerRef]);
+  }, [isDragging, isResizing, startPos, onUpdate, sticker.id, containerRef]);
 
-  const handlePointerUp = useCallback(() => setIsDragging(false), []);
+  const handlePointerUp = useCallback(() => { setIsDragging(false); setIsResizing(false); }, []);
 
   useEffect(() => {
     if (isDragging) {
@@ -1526,9 +1518,16 @@ function DraggableSticker({ sticker, containerRef, onUpdate, onDelete, isSelecte
       {sticker.content.startsWith('data:image') ? (
         <img src={sticker.content} className="w-full h-full object-contain pointer-events-none" draggable={false} style={{ width: '1em', height: '1em' }} />
       ) : (
-        sticker.content
+        <span style={{ color: sticker.color || 'inherit', fontFamily: sticker.fontFamily || 'inherit', whiteSpace: 'nowrap' }}>{sticker.content}</span>
       )}
       
+      {isSelected && (
+        <div
+          className="absolute -bottom-3 -right-3 w-5 h-5 bg-indigo-500 rounded-sm cursor-se-resize border-2 border-white z-50"
+          onMouseDown={(e) => { e.stopPropagation(); setIsResizing(true); setStartPos({ mouseX: e.clientX, mouseY: e.clientY, stickerX: sticker.x, stickerY: sticker.y, scale: sticker.scale }); }}
+          onTouchStart={(e) => { e.stopPropagation(); const touch = e.touches[0]; setIsResizing(true); setStartPos({ mouseX: touch.clientX, mouseY: touch.clientY, stickerX: sticker.x, stickerY: sticker.y, scale: sticker.scale }); }}
+        />
+      )}
       {isSelected && (
         <button 
           onClick={(e) => { e.stopPropagation(); onDelete(sticker.id); }}
@@ -1563,6 +1562,13 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
     };
     setStickers([...stickers, newSticker]);
     setSelectedStickerId(newSticker.id);
+  };
+
+  const addText = () => {
+    const newText = { id: `text_${Date.now()}`, content: 'ข้อความของฉัน', x: 50, y: 50, scale: 1, rotation: 0, isText: true, color: '#111827', fontFamily };
+    setStickers(prev => [...prev, newText]);
+    setSelectedStickerId(newText.id);
+    setActiveTab('text');
   };
 
   const updateSticker = (id, newProps) => setStickers(prev => prev.map(s => s.id === id ? { ...s, ...newProps } : s));
@@ -1737,7 +1743,8 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
             img.src = s.content;
           });
         } else {
-          ctx.font = `${size}px sans-serif`;
+          ctx.font = `${s.isText ? 'bold ' : ''}${size}px '${s.fontFamily || fontFamily}', sans-serif`;
+          ctx.fillStyle = s.color || '#111827';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(s.content, 0, 0);
@@ -1771,6 +1778,13 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
           title="สติกเกอร์"
         >
           <Smile className="w-6 h-6" />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); addText(); }}
+          className={`p-3 rounded-xl transition-colors ${activeTab === 'text' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
+          title="ข้อความ"
+        >
+          <Type className="w-6 h-6" />
         </button>
         <button 
           onClick={(e) => { e.stopPropagation(); setActiveTab('frame'); }}
@@ -1943,6 +1957,23 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
                 แตะที่สติกเกอร์บนรูป <br/> เพื่อปรับขนาดและหมุน
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'text' && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">ตกแต่งข้อความ</h3>
+            <button onClick={addText} className="w-full bg-amber-600 hover:bg-amber-500 py-3 rounded-xl font-bold mb-4">เพิ่มข้อความ</button>
+            {selectedStickerId && stickers.find(s => s.id === selectedStickerId)?.isText ? (() => {
+              const text = stickers.find(s => s.id === selectedStickerId);
+              return <div className="space-y-4 bg-zinc-800/80 p-4 rounded-2xl border border-zinc-700">
+                <input value={text.content} onChange={e => updateSticker(text.id, { content: e.target.value })} className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white" />
+                <input type="color" value={text.color || '#111827'} onChange={e => updateSticker(text.id, { color: e.target.value })} className="w-full h-10 rounded cursor-pointer" />
+                <label className="text-xs text-zinc-300 flex justify-between"><span>ขนาด</span><span>{Math.round(text.scale * 100)}%</span></label>
+                <input type="range" min="0.35" max="4" step="0.05" value={text.scale} onChange={e => updateSticker(text.id, { scale: Number(e.target.value) })} className="w-full accent-amber-500" />
+                <input type="range" min="-180" max="180" value={text.rotation} onChange={e => updateSticker(text.id, { rotation: Number(e.target.value) })} className="w-full accent-amber-500" />
+              </div>;
+            })() : <div className="text-zinc-500 text-sm text-center border-2 border-dashed border-zinc-800 rounded-2xl p-6">เพิ่มข้อความแล้วแตะข้อความบนรูปเพื่อแก้ไข</div>}
           </div>
         )}
 
