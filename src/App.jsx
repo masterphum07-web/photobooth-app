@@ -366,7 +366,9 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
   const [layoutName, setLayoutName] = useState('');
   const [canvasSize, setCanvasSize] = useState({ vW: 1200, vH: 1800 });
   const [slots, setSlots] = useState([]);
+  const [texts, setTexts] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [selectedText, setSelectedText] = useState(null);
   const [dragState, setDragState] = useState(null); // { slotId, type: 'move'|'resize', startX, startY, origSlot }
   const canvasRef = useRef(null);
 
@@ -375,10 +377,12 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
       setLayoutName(template.name);
       setCanvasSize({ vW: template.vW, vH: template.vH });
       setSlots(template.slots.map(s => ({...s})));
+      setTexts((template.texts || []).map(t => ({...t})));
     } else {
       setLayoutName('เลย์เอาต์ใหม่');
       setCanvasSize({ vW: 1200, vH: 1800 });
       setSlots([{ id: 0, x: 10, y: 10, w: 80, h: 35 }]);
+      setTexts([]);
     }
     setEditingLayout('new');
     setSelectedSlot(null);
@@ -388,6 +392,7 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
     setLayoutName(layout.name);
     setCanvasSize({ vW: layout.vW, vH: layout.vH });
     setSlots(layout.slots.map(s => ({...s})));
+    setTexts((layout.texts || []).map(t => ({...t})));
     setEditingLayout(layout.id);
     setSelectedSlot(null);
   };
@@ -409,6 +414,21 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
     setSlots([...slots, { ...orig, id: newId, x: Math.min(orig.x + 5, 90), y: Math.min(orig.y + 5, 90) }]);
   };
 
+  const addText = () => {
+    const id = `text_${Date.now()}`;
+    setTexts(prev => [...prev, { id, text: 'ข้อความใหม่', x: 50, y: 95, size: 5, color: '#111827' }]);
+    setSelectedText(id); setSelectedSlot(null);
+  };
+  const updateText = (id, changes) => setTexts(prev => prev.map(t => t.id === id ? { ...t, ...changes } : t));
+  const deleteText = (id) => { setTexts(prev => prev.filter(t => t.id !== id)); if (selectedText === id) setSelectedText(null); };
+  const handleTextPointerDown = (e, textId) => {
+    e.stopPropagation(); e.preventDefault();
+    const rect = canvasRef.current.getBoundingClientRect();
+    const t = texts.find(item => item.id === textId);
+    setSelectedText(textId); setSelectedSlot(null);
+    setDragState({ slotId: textId, type: 'text', startX: e.clientX, startY: e.clientY, origSlot: { ...t }, canvasW: rect.width, canvasH: rect.height });
+  };
+
   const saveLayout = () => {
     if (!layoutName.trim()) return;
     const layoutData = {
@@ -417,6 +437,7 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
       vW: canvasSize.vW,
       vH: canvasSize.vH,
       slots: slots.map((s, i) => ({ ...s, id: i })),
+      texts,
     };
     
     if (editingLayout === 'new') {
@@ -459,6 +480,11 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
     const dx = ((clientX - dragState.startX) / dragState.canvasW) * 100;
     const dy = ((clientY - dragState.startY) / dragState.canvasH) * 100;
     const orig = dragState.origSlot;
+
+    if (dragState.type === 'text') {
+      setTexts(prev => prev.map(t => t.id === dragState.slotId ? { ...t, x: Math.max(0, Math.min(100, orig.x + dx)), y: Math.max(0, Math.min(100, orig.y + dy)) } : t));
+      return;
+    }
 
     setSlots(prev => prev.map(s => {
       if (s.id !== dragState.slotId) return s;
@@ -576,6 +602,9 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
         <button onClick={addSlot} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-1">
           <Plus className="w-4 h-4"/> เพิ่มช่อง
         </button>
+        <button onClick={addText} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-1">
+          <Type className="w-4 h-4"/> เพิ่มตัวอักษร
+        </button>
       </div>
 
       {/* Canvas Editor */}
@@ -618,6 +647,9 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
                 />
               </div>
             ))}
+            {texts.map(t => (
+              <div key={t.id} className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-move whitespace-nowrap px-2 border ${selectedText === t.id ? 'border-amber-500 bg-amber-100/50' : 'border-transparent'}`} style={{ left: `${t.x}%`, top: `${t.y}%`, color: t.color, fontSize: `${t.size}%`, zIndex: 40 }} onMouseDown={e => handleTextPointerDown(e, t.id)} onTouchStart={e => handleTextPointerDown(e, t.id)} onClick={e => { e.stopPropagation(); setSelectedText(t.id); setSelectedSlot(null); }}>{t.text}</div>
+            ))}
           </div>
         </div>
 
@@ -642,6 +674,11 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
               กดปุ่ม "+ เพิ่มช่อง" เพื่อเริ่มต้น
             </div>
           )}
+
+          <div className="border-t border-zinc-700 pt-3 mt-3">
+            <div className="flex items-center justify-between mb-2"><h4 className="text-xs font-bold text-amber-400">ตัวอักษร ({texts.length})</h4><button onClick={addText} className="text-xs text-amber-400 hover:text-amber-300">+ เพิ่ม</button></div>
+            {texts.map(t => <div key={t.id} onClick={() => { setSelectedText(t.id); setSelectedSlot(null); }} className={`flex gap-2 items-center p-2 rounded-lg ${selectedText === t.id ? 'bg-amber-500/20' : 'bg-zinc-900'}`}><input value={t.text} onChange={e => updateText(t.id, { text: e.target.value })} className="min-w-0 flex-1 bg-zinc-800 rounded px-2 py-1 text-xs text-white" /><input type="color" value={t.color} onChange={e => updateText(t.id, { color: e.target.value })} className="w-7 h-7" /><button onClick={() => deleteText(t.id)} className="text-red-400"><Trash2 className="w-3 h-3" /></button></div>)}
+          </div>
 
           {/* Quick precision editing for selected slot */}
           {selectedSlot !== null && slots.find(s => s.id === selectedSlot) && (() => {
@@ -971,6 +1008,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
                       ))}
                     </div>
                   )}
+                  {(previewLayout.texts || []).map(t => <div key={t.id} className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-bold" style={{ left: `${t.x}%`, top: `${t.y}%`, color: t.color, fontSize: `${Math.max(4, t.size * 0.8)}px`, zIndex: 30 }}>{t.text}</div>)}
                   
                   {!isCustomLayout(previewLayout) && (
                     <div className="h-[12%] min-h-[20px] w-full flex items-center justify-center shrink-0">
@@ -1882,6 +1920,10 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
                 ))}
               </div>
             )}
+
+            {(config.layout.texts || []).map(t => (
+              <div key={t.id} className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-bold pointer-events-none z-30" style={{ left: `${t.x}%`, top: `${t.y}%`, color: t.color, fontSize: `${Math.max(12, (t.size || 5) * 0.25)}vw`, fontFamily: `'${fontFamily}', sans-serif` }}>{t.text}</div>
+            ))}
             
             {/* Frame Overlay Image */}
             {selectedFrame.type === 'image' && (
