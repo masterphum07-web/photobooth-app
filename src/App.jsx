@@ -360,6 +360,14 @@ const getAvailableLayouts = (customLayouts = []) => [
   ...getSafeCustomLayouts(customLayouts),
 ];
 
+const getEditableSlots = (layout) => layout.slots || Array.from({ length: layout.shots || 1 }, (_, i) => ({
+  id: i,
+  x: layout.cols === 2 ? (i % 2) * 50 + 2 : 4,
+  y: layout.cols === 2 ? Math.floor(i / 2) * (100 / Math.ceil((layout.shots || 1) / 2)) + 2 : i * (92 / (layout.shots || 1)) + 2,
+  w: layout.cols === 2 ? 46 : 92,
+  h: layout.cols === 2 ? (92 / Math.ceil((layout.shots || 1) / 2)) - 4 : (92 / (layout.shots || 1)) - 4,
+}));
+
 function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
   const safeCustomLayouts = getSafeCustomLayouts(customLayouts);
   const [editingLayout, setEditingLayout] = useState(null); // null = list mode, object = editing
@@ -376,7 +384,7 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
     if (template) {
       setLayoutName(template.name);
       setCanvasSize({ vW: template.vW, vH: template.vH });
-      setSlots(template.slots.map(s => ({...s})));
+      setSlots(getEditableSlots(template).map(s => ({...s})));
       setTexts((template.texts || []).map(t => ({...t})));
     } else {
       setLayoutName('เลย์เอาต์ใหม่');
@@ -527,14 +535,14 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
           <h4 className="text-sm font-bold text-zinc-400 mb-3 uppercase tracking-wider">เลย์เอาต์เดียวกับหน้า Preview</h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {[LAYOUTS.single, LAYOUTS.strip, LAYOUTS.strip_4].filter(Boolean).map(layout => (
-              <div key={layout.id} className="bg-zinc-800 border border-blue-500/40 rounded-xl p-3">
+              <button key={layout.id} onClick={() => startNewLayout(layout)} className="bg-zinc-800 border border-blue-500/40 rounded-xl p-3 text-left hover:border-green-500 transition-colors">
                 <div className="w-full aspect-[3/4] bg-zinc-900 rounded-lg relative mb-2 overflow-hidden p-2">
                   <div className={`w-full h-full flex flex-col gap-1 ${layout.cols === 2 ? 'grid grid-cols-2' : ''}`}>
                     {Array.from({ length: layout.shots }).map((_, index) => <div key={index} className="flex-1 bg-blue-500/30 border border-blue-500/60 rounded-sm" />)}
                   </div>
                 </div>
                 <span className="text-xs text-zinc-300 font-medium">{layout.name}</span>
-              </div>
+              </button>
             ))}
             <button onClick={() => startNewLayout(null)} className="bg-zinc-800 hover:bg-zinc-700 border-2 border-dashed border-zinc-600 hover:border-green-500 rounded-xl p-3 transition-all flex flex-col items-center justify-center gap-2 min-h-[140px]"><Plus className="w-8 h-8 text-zinc-500" /><span className="text-xs text-zinc-400">สร้างเอง</span></button>
           </div>
