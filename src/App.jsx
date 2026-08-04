@@ -354,8 +354,9 @@ const LAYOUT_TEMPLATES = [
 ];
 
 const getAvailableLayouts = (customLayouts = []) => [
-  ...Object.values(LAYOUTS),
-  ...LAYOUT_TEMPLATES.map((layout, index) => ({ ...layout, id: `template_${index}` })),
+  LAYOUTS.single,
+  LAYOUTS.strip,
+  LAYOUTS.strip4,
   ...getSafeCustomLayouts(customLayouts),
 ];
 
@@ -497,17 +498,17 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
         <h3 className="text-xl font-semibold flex items-center gap-2"><Grid3X3 className="text-green-400"/> จัดเลย์เอาต์ (Custom Layout Editor)</h3>
         
         <div>
-          <h4 className="text-sm font-bold text-zinc-400 mb-3 uppercase tracking-wider">เทมเพลตที่ใช้ร่วมกับ Preview และหน้าถ่ายรูป</h4>
+          <h4 className="text-sm font-bold text-zinc-400 mb-3 uppercase tracking-wider">เลย์เอาต์เดียวกับหน้า Preview</h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {LAYOUT_TEMPLATES.map((template, index) => (
-              <button key={index} onClick={() => startNewLayout(template)} className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-green-500 rounded-xl p-3 transition-all group">
-                <div className="w-full aspect-[3/4] bg-zinc-900 rounded-lg relative mb-2 overflow-hidden">
-                  {template.slots.map((slot, slotIndex) => (
-                    <div key={slotIndex} className="absolute bg-green-500/30 border border-green-500/60 rounded-sm flex items-center justify-center text-green-300 text-xs font-bold group-hover:bg-green-500/50 transition-colors" style={{ left: `${slot.x}%`, top: `${slot.y}%`, width: `${slot.w}%`, height: `${slot.h}%` }}>{slotIndex + 1}</div>
-                  ))}
+            {[LAYOUTS.single, LAYOUTS.strip, LAYOUTS.strip4].map(layout => (
+              <div key={layout.id} className="bg-zinc-800 border border-blue-500/40 rounded-xl p-3">
+                <div className="w-full aspect-[3/4] bg-zinc-900 rounded-lg relative mb-2 overflow-hidden p-2">
+                  <div className={`w-full h-full flex flex-col gap-1 ${layout.cols === 2 ? 'grid grid-cols-2' : ''}`}>
+                    {Array.from({ length: layout.shots }).map((_, index) => <div key={index} className="flex-1 bg-blue-500/30 border border-blue-500/60 rounded-sm" />)}
+                  </div>
                 </div>
-                <span className="text-xs text-zinc-300 font-medium">{template.name}</span>
-              </button>
+                <span className="text-xs text-zinc-300 font-medium">{layout.name}</span>
+              </div>
             ))}
             <button onClick={() => startNewLayout(null)} className="bg-zinc-800 hover:bg-zinc-700 border-2 border-dashed border-zinc-600 hover:border-green-500 rounded-xl p-3 transition-all flex flex-col items-center justify-center gap-2 min-h-[140px]"><Plus className="w-8 h-8 text-zinc-500" /><span className="text-xs text-zinc-400">สร้างเอง</span></button>
           </div>
