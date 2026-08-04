@@ -368,10 +368,11 @@ const getEditableSlots = (layout) => layout.slots || Array.from({ length: layout
   h: layout.cols === 2 ? (92 / Math.ceil((layout.shots || 1) / 2)) - 4 : (92 / (layout.shots || 1)) - 4,
 }));
 
-function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
+function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {}, landingConfig = {}, setLandingConfig = () => {} }) {
   const safeCustomLayouts = getSafeCustomLayouts(customLayouts);
   const [editingLayout, setEditingLayout] = useState(null); // null = list mode, object = editing
   const [layoutName, setLayoutName] = useState('');
+  const [brandText, setBrandText] = useState(landingConfig.brandText || 'STUDIO BOOTH');
   const [canvasSize, setCanvasSize] = useState({ vW: 1200, vH: 1800 });
   const [slots, setSlots] = useState([]);
   const [texts, setTexts] = useState([]);
@@ -383,6 +384,7 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
   const startNewLayout = (template) => {
     if (template) {
       setLayoutName(template.name);
+      setBrandText(template.brandText || landingConfig.brandText || 'STUDIO BOOTH');
       setCanvasSize({ vW: template.vW, vH: template.vH });
       setSlots(getEditableSlots(template).map(s => ({...s})));
       setTexts((template.texts || []).map(t => ({...t})));
@@ -398,6 +400,7 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
 
   const editLayout = (layout) => {
     setLayoutName(layout.name);
+    setBrandText(layout.brandText || landingConfig.brandText || 'STUDIO BOOTH');
     setCanvasSize({ vW: layout.vW, vH: layout.vH });
     setSlots(layout.slots.map(s => ({...s})));
     setTexts((layout.texts || []).map(t => ({...t})));
@@ -446,6 +449,7 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
       vH: canvasSize.vH,
       slots: slots.map((s, i) => ({ ...s, id: i })),
       texts,
+      brandText,
     };
     
     if (editingLayout === 'new') {
@@ -611,9 +615,14 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
         <button onClick={addSlot} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-1">
           <Plus className="w-4 h-4"/> เพิ่มช่อง
         </button>
+        <div className="min-w-[180px] flex-1"><label className="text-xs text-zinc-400 mb-1 block">ข้อความใต้เลย์เอาต์</label><input value={brandText} onChange={e => setBrandText(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" /></div>
         <button onClick={addText} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-1">
           <Type className="w-4 h-4"/> เพิ่มตัวอักษร
         </button>
+      </div>
+      <div className="flex items-center gap-3 bg-zinc-800/70 border border-blue-500/30 rounded-xl p-3">
+        <label className="text-sm text-blue-300 whitespace-nowrap">ข้อความใต้รูป (เชื่อมกับ Preview)</label>
+        <input value={landingConfig.brandText || ''} onChange={e => setLandingConfig({ ...landingConfig, brandText: e.target.value })} className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white" placeholder="STUDIO BOOTH" />
       </div>
 
       {/* Canvas Editor */}
@@ -659,6 +668,7 @@ function LayoutEditorTab({ customLayouts = [], setCustomLayouts = () => {} }) {
             {texts.map(t => (
               <div key={t.id} className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-move whitespace-nowrap px-2 border ${selectedText === t.id ? 'border-amber-500 bg-amber-100/50' : 'border-transparent'}`} style={{ left: `${t.x}%`, top: `${t.y}%`, color: t.color, fontSize: `${t.size}%`, zIndex: 40 }} onMouseDown={e => handleTextPointerDown(e, t.id)} onTouchStart={e => handleTextPointerDown(e, t.id)} onClick={e => { e.stopPropagation(); setSelectedText(t.id); setSelectedSlot(null); }}>{t.text}</div>
             ))}
+            <div className="absolute bottom-[3%] left-1/2 -translate-x-1/2 text-black font-bold text-[clamp(8px,2vw,18px)] pointer-events-none whitespace-nowrap">{landingConfig.brandText || 'STUDIO BOOTH'}</div>
           </div>
         </div>
 
@@ -1018,6 +1028,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
                     </div>
                   )}
                   {(previewLayout.texts || []).map(t => <div key={t.id} className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-bold" style={{ left: `${t.x}%`, top: `${t.y}%`, color: t.color, fontSize: `${Math.max(4, t.size * 0.8)}px`, zIndex: 30 }}>{t.text}</div>)}
+                  {isCustomLayout(previewLayout) && previewLayout.brandText && <div className="absolute bottom-[2%] left-0 right-0 text-center font-bold text-[6px] text-zinc-900">{previewLayout.brandText}</div>}
                   
                   {!isCustomLayout(previewLayout) && (
                     <div className="h-[12%] min-h-[20px] w-full flex items-center justify-center shrink-0">
@@ -1125,7 +1136,7 @@ function AdminView({ frames, setFrames, stickers, setStickers, landingConfig, se
         )}
         
         {activeTab === 'layouts' && (
-          <LayoutEditorTab customLayouts={safeCustomLayouts} setCustomLayouts={setCustomLayouts} />
+          <LayoutEditorTab customLayouts={safeCustomLayouts} setCustomLayouts={setCustomLayouts} landingConfig={landingConfig} setLandingConfig={setLandingConfig} />
         )}
 
         {activeTab === 'cloud' && (
@@ -1841,13 +1852,6 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
         >
           <Smile className="w-6 h-6" />
         </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); addText(); }}
-          className={`p-3 rounded-xl transition-colors ${activeTab === 'text' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
-          title="ข้อความ"
-        >
-          <Type className="w-6 h-6" />
-        </button>
         <button 
           onClick={(e) => { e.stopPropagation(); setActiveTab('frame'); }}
           className={`p-3 rounded-xl transition-colors ${activeTab === 'frame' ? 'bg-fuchsia-500 text-white shadow-lg shadow-fuchsia-500/30' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
@@ -1877,23 +1881,13 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
           */}
           <div 
             ref={layoutRef}
-            className={`relative overflow-hidden ${customLayout ? '' : config.layout.aspect} flex flex-col transition-colors duration-300 ring-1 ring-white/10 max-h-[calc(100vh-120px)] max-w-full w-auto`}
+            className={`relative overflow-hidden ${customLayout ? '' : config.layout.aspect} flex flex-col transition-colors duration-300 ring-1 ring-white/10 max-h-[calc(100vh-70px)] max-w-full w-auto`}
               style={{ 
                 background: selectedFrame.type === 'image' ? '#ffffff' : selectedFrame.bg,
                 padding: customLayout ? 0 : `${photoConfig?.padding ?? 5}%`,
                 ...(customLayout ? getLayoutAspectStyle(config.layout) : {})
               }}
           >
-            {/* Top-left date */}
-            {selectedFrame.type !== 'image' && (
-              <div 
-                className="absolute top-[2%] left-[4%] z-20 font-bold opacity-80 tracking-widest pointer-events-none"
-                style={{ color: selectedFrame.text, fontSize: 'clamp(8px, 1.2vh, 16px)', fontFamily: `'${fontFamily}', sans-serif` }}
-              >
-                {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-              </div>
-            )}
-
             {/* Photos Grid */}
             {customLayout ? (
               <div className="absolute inset-0 z-10">
@@ -1933,19 +1927,11 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
             {(config.layout.texts || []).map(t => (
               <div key={t.id} className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-bold pointer-events-none z-30" style={{ left: `${t.x}%`, top: `${t.y}%`, color: t.color, fontSize: `${Math.max(12, (t.size || 5) * 0.25)}vw`, fontFamily: `'${fontFamily}', sans-serif` }}>{t.text}</div>
             ))}
+            {customLayout && config.layout.brandText && <div className="absolute bottom-[2%] left-0 right-0 text-center font-bold text-[clamp(12px,2vh,24px)] tracking-widest pointer-events-none z-30" style={{ color: selectedFrame.text, fontFamily: `'${fontFamily}', sans-serif` }}>{config.layout.brandText}</div>}
             
             {/* Frame Overlay Image */}
             {selectedFrame.type === 'image' && (
               <img src={selectedFrame.src} className="absolute inset-0 w-full h-full object-cover pointer-events-none z-10" />
-            )}
-
-            {/* Branding */}
-            {selectedFrame.type !== 'image' && !customLayout && (
-              <div className="h-[10%] min-h-[40px] flex items-center justify-center shrink-0 z-0">
-                <span className="font-bold text-[clamp(12px,2vh,24px)] tracking-widest opacity-90" style={{ color: selectedFrame.text, fontFamily: `'${fontFamily}', sans-serif` }}>
-                  {brandText}
-                </span>
-              </div>
             )}
 
             {/* Draggable Stickers Overlay (inside the layout ref so % positioning works) */}
@@ -2023,23 +2009,6 @@ function EditorView({ config, photos, availableFrames, availableStickers, brandT
                 แตะที่สติกเกอร์บนรูป <br/> เพื่อปรับขนาดและหมุน
               </div>
             )}
-          </div>
-        )}
-
-        {activeTab === 'text' && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">ตกแต่งข้อความ</h3>
-            <button onClick={addText} className="w-full bg-amber-600 hover:bg-amber-500 py-3 rounded-xl font-bold mb-4">เพิ่มข้อความ</button>
-            {selectedStickerId && stickers.find(s => s.id === selectedStickerId)?.isText ? (() => {
-              const text = stickers.find(s => s.id === selectedStickerId);
-              return <div className="space-y-4 bg-zinc-800/80 p-4 rounded-2xl border border-zinc-700">
-                <input value={text.content} onChange={e => updateSticker(text.id, { content: e.target.value })} className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white" />
-                <input type="color" value={text.color || '#111827'} onChange={e => updateSticker(text.id, { color: e.target.value })} className="w-full h-10 rounded cursor-pointer" />
-                <label className="text-xs text-zinc-300 flex justify-between"><span>ขนาด</span><span>{Math.round(text.scale * 100)}%</span></label>
-                <input type="range" min="0.35" max="4" step="0.05" value={text.scale} onChange={e => updateSticker(text.id, { scale: Number(e.target.value) })} className="w-full accent-amber-500" />
-                <input type="range" min="-180" max="180" value={text.rotation} onChange={e => updateSticker(text.id, { rotation: Number(e.target.value) })} className="w-full accent-amber-500" />
-              </div>;
-            })() : <div className="text-zinc-500 text-sm text-center border-2 border-dashed border-zinc-800 rounded-2xl p-6">เพิ่มข้อความแล้วแตะข้อความบนรูปเพื่อแก้ไข</div>}
           </div>
         )}
 
